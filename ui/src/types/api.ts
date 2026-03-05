@@ -11,7 +11,14 @@ export type DocumentRow = {
   is_deleted: number;
 };
 
-export type GetDocumentResponse = { ok: true; document: DocumentRow };
+export type GetDocumentResponse = {
+  ok: true;
+  document: DocumentRow;
+  preview?: {
+    svgPath: string | null;
+    svg: string | null;
+  };
+};
 export type ListDocumentsResponse = { ok: true; documents: DocumentRow[] };
 
 export type SaveRevisionResponse = {
@@ -33,6 +40,13 @@ export type JoinSessionResponse = {
 };
 
 export type StatsResponse = { ok: true; stats: { revisions: number; attempts: number } };
+export type UserSettings = {
+  editor_font_size: number;
+  preview_split: number;
+  sidebar_width: number;
+  trace_height: number;
+};
+export type SettingsResponse = { ok: true; settings: UserSettings };
 
 export type QuizRandomResponse = {
   ok: boolean;

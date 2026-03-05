@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../store/api";
 import { useAuthStore } from "../store/authStore";
 import { useStudioStore } from "../store/studioStore";
@@ -23,6 +23,12 @@ type Collaborator = {
   caretLeft: number;
   caretRight: number;
 };
+
+type DragState =
+  | { kind: "sidebar"; startX: number; base: number }
+  | { kind: "preview"; startX: number; base: number }
+  | { kind: "trace"; startY: number; base: number }
+  | null;
 
 export function StudioPage() {
   const token = useAuthStore((s) => s.token)!;
@@ -52,169 +58,241 @@ export function StudioPage() {
   const [trace, setTrace] = useState<string[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [collaborators, setCollaborators] = useState<Record<number, Collaborator>>({});
-  const debounce = useRef<number | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [previewSplit, setPreviewSplit] = useState(0.5);
+  const [traceHeight, setTraceHeight] = useState(112);
+  const [settingsReady, setSettingsReady] = useState(false);
+
   const toastTimer = useRef<number | null>(null);
+  const settingsSaveTimer = useRef<number | null>(null);
+  const wsRef = useRef<ReturnType<typeof connectCollab> | null>(null);
+  const bootRef = useRef(false);
+  const loadSeqRef = useRef(0);
+  const codeRef = useRef("");
+  const canEditRef = useRef(true);
+  const lastSentCodeRef = useRef("");
+  const dragRef = useRef<DragState>(null);
 
-  const addTrace = (line: string) => {
+  const canEdit = lockUserId === null || lockUserId === user.id;
+  canEditRef.current = canEdit;
+
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+
+  const addTrace = useCallback((line: string) => {
     setTrace((prev) => [...prev.slice(-29), `${new Date().toLocaleTimeString()} ${line}`]);
-  };
+  }, []);
 
-  const showToast = (message: string, tone: ToastTone = "ok") => {
+  const showToast = useCallback((message: string, tone: ToastTone = "ok") => {
     setToast({ message, tone });
     if (toastTimer.current) {
       window.clearTimeout(toastTimer.current);
     }
     toastTimer.current = window.setTimeout(() => setToast(null), 2600);
-  };
+  }, []);
 
-  const loadDocument = useMemo(
-    () => async (nextDocId: number) => {
-      setCollaborators({});
-      const d = await api.getDocument(token, nextDocId);
-      setSnapshot({
-        doc: d.document,
-        code: d.document.code,
-        revision: d.document.current_revision,
-        lockUserId: null,
-      });
+  const closeWs = useCallback(() => {
+    wsRef.current?.close();
+    wsRef.current = null;
+    setWsState(null);
+  }, []);
 
-      wsState?.close();
+  const loadDocument = useCallback(async (nextDocId: number) => {
+    const seq = ++loadSeqRef.current;
+    setCollaborators({});
+    closeWs();
 
-      const s = await api.joinSession(token, nextDocId);
-      if (!s.wsEnabled || !s.wsUrl) {
-        setWsEnabled(false);
-        setWsState(null);
-        addTrace("WS disabled by backend (/api/sessions wsEnabled=false)");
-        return;
-      }
+    const d = await api.getDocument(token, nextDocId);
+    if (seq !== loadSeqRef.current) return;
 
-      const conn = connectCollab(s.wsUrl, token, nextDocId, {
-        onSnapshot: (p) => {
-          addTrace(`IN DOC_SNAPSHOT rev=${p.revision}`);
-          setCode(p.code);
-          setRevision(p.revision);
-          setLock(p.lockUserId ?? null);
-          const entries: Record<number, Collaborator> = {};
-          for (const c of p?.collaborators ?? []) {
-            const id = Number(c?.userId ?? 0);
-            if (id <= 0) continue;
-            entries[id] = {
-              userId: id,
-              name: String(c?.name ?? `user-${id}`),
-              color: String(c?.color ?? "#9ca3af"),
-              caretLeft: Number(c?.caret?.left ?? 0),
-              caretRight: Number(c?.caret?.right ?? 0),
-            };
+    setSnapshot({
+      doc: d.document,
+      code: d.document.code,
+      revision: d.document.current_revision,
+      lockUserId: null,
+    });
+    setSvg(typeof d.preview?.svg === "string" ? d.preview.svg : "");
+    codeRef.current = d.document.code;
+    lastSentCodeRef.current = d.document.code;
+
+    const s = await api.joinSession(token, nextDocId);
+    if (seq !== loadSeqRef.current) return;
+
+    if (!s.wsEnabled || !s.wsUrl) {
+      setWsEnabled(false);
+      addTrace("WS disabled by backend (/api/sessions wsEnabled=false)");
+      return;
+    }
+
+    const conn = connectCollab(s.wsUrl, token, nextDocId, {
+      onSnapshot: (p) => {
+        addTrace(`IN DOC_SNAPSHOT rev=${p.revision}`);
+        const nextCode = String(p.code ?? "");
+        setCode(nextCode);
+        codeRef.current = nextCode;
+        lastSentCodeRef.current = nextCode;
+        setRevision(p.revision);
+        setLock(p.lockUserId ?? null);
+        const entries: Record<number, Collaborator> = {};
+        for (const c of p?.collaborators ?? []) {
+          const id = Number(c?.userId ?? 0);
+          if (id <= 0) continue;
+          entries[id] = {
+            userId: id,
+            name: String(c?.name ?? `user-${id}`),
+            color: String(c?.color ?? "#9ca3af"),
+            caretLeft: Number(c?.caret?.left ?? 0),
+            caretRight: Number(c?.caret?.right ?? 0),
+          };
+        }
+        setCollaborators(entries);
+      },
+      onLockAcquired: (p) => {
+        addTrace(`IN LOCK_ACQUIRED user=${p?.userId ?? "?"}`);
+        setLock(Number(p?.userId ?? user.id));
+      },
+      onLockReleased: () => {
+        addTrace("IN LOCK_RELEASED");
+        setLock(null);
+      },
+      onEditAck: (p) => {
+        addTrace(`IN DOC_EDIT_ACK ok=${p?.ok ? "true" : "false"} rev=${p?.revision ?? "?"}`);
+        if (p?.ok === true) {
+          lastSentCodeRef.current = codeRef.current;
+          return;
+        }
+
+        const err = String(p?.error?.category ?? p?.error?.code ?? "edit_failed");
+        addTrace(`IN DOC_EDIT_REJECT ${err}`);
+        if (err !== "invalid_transition") {
+          showToast(`Edit rejected: ${err}`, "warn");
+        }
+        void (async () => {
+          try {
+            const fresh = await api.getDocument(token, nextDocId);
+            const freshCode = String(fresh.document.code ?? "");
+            setCode(freshCode);
+            codeRef.current = freshCode;
+            lastSentCodeRef.current = freshCode;
+            setRevision(fresh.document.current_revision);
+            if (typeof fresh.preview?.svg === "string") {
+              setSvg(fresh.preview.svg);
+            }
+          } catch {
+            addTrace("SYNC failed after reject");
           }
-          setCollaborators(entries);
-        },
-        onLockAcquired: (p) => {
-          addTrace(`IN LOCK_ACQUIRED user=${p?.userId ?? "?"}`);
-          setLock(Number(p?.userId ?? user.id));
-        },
-        onLockReleased: () => {
-          addTrace("IN LOCK_RELEASED");
-          setLock(null);
-        },
-        onEditAck: (p) => {
-          addTrace(`IN DOC_EDIT_ACK ok=${p?.ok ? "true" : "false"} rev=${p?.revision ?? "?"}`);
-          if (p?.ok === false) {
-            const err = p?.error?.category ?? "edit_failed";
-            showToast(`Edit rejected: ${err}`, "warn");
-          }
-        },
-        onEditApplied: (p) => {
-          const change = p?.change;
-          addTrace(`IN DOC_EDIT_APPLIED rev=${p.revision ?? "?"}`);
-          if (change?.type === "replace" && typeof change?.text === "string") {
-            const prevCode = useStudioStore.getState().code;
-            const l = Number(change?.range?.left ?? 0);
-            const r = Number(change?.range?.right ?? 0);
-            const safeL = Math.max(0, Math.min(prevCode.length, l));
-            const safeR = Math.max(safeL, Math.min(prevCode.length, r));
-            setCode(prevCode.slice(0, safeL) + change.text + prevCode.slice(safeR));
-          }
-          if (typeof p.revision === "number") setRevision(p.revision);
-          const uid = Number(p?.userId ?? 0);
-          if (uid > 0) {
-            setCollaborators((prev) => ({
-              ...prev,
-              [uid]: {
-                userId: uid,
-                name: String(p?.name ?? prev[uid]?.name ?? `user-${uid}`),
-                color: String(p?.color ?? prev[uid]?.color ?? "#9ca3af"),
-                caretLeft: Number(p?.caret?.left ?? prev[uid]?.caretLeft ?? 0),
-                caretRight: Number(p?.caret?.right ?? prev[uid]?.caretRight ?? 0),
-              },
-            }));
-          }
-        },
-        onCollaboratorJoin: (p) => {
-          const uid = Number(p?.userId ?? 0);
-          if (uid <= 0) return;
-          addTrace(`IN DOC_COLLABORATOR_JOIN user=${uid}`);
+        })();
+      },
+      onEditApplied: (p) => {
+        const change = p?.change;
+        addTrace(`IN DOC_EDIT_APPLIED rev=${p.revision ?? "?"}`);
+        if (change?.type === "replace" && typeof change?.text === "string") {
+          const prevCode = useStudioStore.getState().code;
+          const l = Number(change?.range?.left ?? 0);
+          const r = Number(change?.range?.right ?? 0);
+          const safeL = Math.max(0, Math.min(prevCode.length, l));
+          const safeR = Math.max(safeL, Math.min(prevCode.length, r));
+          const nextCode = prevCode.slice(0, safeL) + change.text + prevCode.slice(safeR);
+          setCode(nextCode);
+          codeRef.current = nextCode;
+          lastSentCodeRef.current = nextCode;
+        }
+        if (typeof p.revision === "number") setRevision(p.revision);
+        const uid = Number(p?.userId ?? 0);
+        if (uid > 0) {
           setCollaborators((prev) => ({
             ...prev,
             [uid]: {
               userId: uid,
-              name: String(p?.name ?? `user-${uid}`),
-              color: String(p?.color ?? "#9ca3af"),
-              caretLeft: Number(p?.caret?.left ?? 0),
-              caretRight: Number(p?.caret?.right ?? 0),
+              name: String(p?.name ?? prev[uid]?.name ?? `user-${uid}`),
+              color: String(p?.color ?? prev[uid]?.color ?? "#9ca3af"),
+              caretLeft: Number(p?.caret?.left ?? prev[uid]?.caretLeft ?? 0),
+              caretRight: Number(p?.caret?.right ?? prev[uid]?.caretRight ?? 0),
             },
           }));
-        },
-        onCollaboratorLeave: (p) => {
-          const uid = Number(p?.userId ?? 0);
-          if (uid <= 0) return;
-          addTrace(`IN DOC_COLLABORATOR_LEAVE user=${uid}`);
-          setCollaborators((prev) => {
-            const next = { ...prev };
-            delete next[uid];
-            return next;
-          });
-        },
-        onRenderFinished: (p) => {
-          addTrace(`IN DOC_RENDER_FINISHED rev=${p.revision ?? "?"}`);
-          if (typeof p.svg === "string") setSvg(p.svg);
-          if (typeof p.revision === "number") setRevision(p.revision);
-        },
-        onLockChanged: (p) => {
-          addTrace(`IN LOCK_CHANGED lock=${p.lockUserId ?? "none"}`);
-          setLock(p.lockUserId ?? null);
-        },
-        onError: (p) => {
-          const code = p?.code ?? "unknown";
-          addTrace(`IN ERROR ${code}`);
-          if (code === "locked_by_other") {
-            showToast("Документ уже заблокирован другим пользователем", "warn");
-          } else {
-            showToast(`WS error: ${code}`, "error");
-          }
-        },
-      });
+        }
+      },
+      onCollaboratorJoin: (p) => {
+        const uid = Number(p?.userId ?? 0);
+        if (uid <= 0) return;
+        addTrace(`IN DOC_COLLABORATOR_JOIN user=${uid}`);
+        setCollaborators((prev) => ({
+          ...prev,
+          [uid]: {
+            userId: uid,
+            name: String(p?.name ?? `user-${uid}`),
+            color: String(p?.color ?? "#9ca3af"),
+            caretLeft: Number(p?.caret?.left ?? 0),
+            caretRight: Number(p?.caret?.right ?? 0),
+          },
+        }));
+      },
+      onCollaboratorLeave: (p) => {
+        const uid = Number(p?.userId ?? 0);
+        if (uid <= 0) return;
+        addTrace(`IN DOC_COLLABORATOR_LEAVE user=${uid}`);
+        setCollaborators((prev) => {
+          const next = { ...prev };
+          delete next[uid];
+          return next;
+        });
+      },
+      onRenderFinished: (p) => {
+        addTrace(`IN DOC_RENDER_FINISHED rev=${p.revision ?? "?"}`);
+        if (typeof p.svg === "string") setSvg(p.svg);
+        if (typeof p.revision === "number") setRevision(p.revision);
+      },
+      onLockChanged: (p) => {
+        addTrace(`IN LOCK_CHANGED lock=${p.lockUserId ?? "none"}`);
+        setLock(p.lockUserId ?? null);
+      },
+      onError: (p) => {
+        const code = p?.code ?? "unknown";
+        addTrace(`IN ERROR ${code}`);
+        if (code === "locked_by_other") {
+          showToast("Документ уже заблокирован другим пользователем", "warn");
+        } else {
+          showToast(`WS error: ${code}`, "error");
+        }
+      },
+    });
 
-      setWsState(conn);
-      try {
-        await conn.ready;
-        setWsEnabled(true);
-        addTrace(`WS connected ${s.wsUrl}`);
-      } catch {
-        setWsEnabled(false);
-        addTrace(`WS connect failed ${s.wsUrl}`);
-        showToast("WS недоступен, активен только HTTP save", "warn");
+    wsRef.current = conn;
+    setWsState(conn);
+    try {
+      await conn.ready;
+      if (seq !== loadSeqRef.current) {
+        conn.close();
+        return;
       }
-    },
-    [setCode, setLock, setRevision, setSnapshot, setSvg, token, wsState]
-  );
-
-  const canEdit = lockUserId === null || lockUserId === user.id;
+      setWsEnabled(true);
+      addTrace(`WS connected ${s.wsUrl}`);
+    } catch {
+      if (seq !== loadSeqRef.current) return;
+      setWsEnabled(false);
+      addTrace(`WS connect failed ${s.wsUrl}`);
+      showToast("WS недоступен, активен только HTTP save", "warn");
+    }
+  }, [addTrace, closeWs, setCode, setLock, setRevision, setSnapshot, setSvg, showToast, token, user.id]);
 
   useEffect(() => {
-    (async () => {
-      const [list, userStats] = await Promise.all([api.listDocuments(token, "personal"), api.getStats(token)]);
+    if (bootRef.current) return;
+    bootRef.current = true;
+
+    void (async () => {
+      const [list, userStats, settingsResult] = await Promise.all([
+        api.listDocuments(token, "personal"),
+        api.getStats(token),
+        api.getSettings(token).catch(() => null),
+      ]);
       setDocs(list.documents);
       setStats(userStats.stats);
+      setSidebarWidth(Number(settingsResult?.settings?.sidebar_width ?? 240));
+      setPreviewSplit(Number(settingsResult?.settings?.preview_split ?? 0.5));
+      setTraceHeight(Number(settingsResult?.settings?.trace_height ?? 112));
+      setSettingsReady(true);
+
       const qp = new URLSearchParams(window.location.search);
       const requestedDocId = Number(qp.get("doc") ?? 0);
       const firstDocId = requestedDocId > 0 ? requestedDocId : (list.documents[0]?.id ?? 1);
@@ -223,53 +301,90 @@ export function StudioPage() {
     })();
 
     return () => {
-      wsState?.close();
-      if (toastTimer.current) {
-        window.clearTimeout(toastTimer.current);
-      }
+      closeWs();
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      if (settingsSaveTimer.current) window.clearTimeout(settingsSaveTimer.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [closeWs, loadDocument, setDocId, setDocs, token]);
 
-  const saveNow = useMemo(
-    () => async (nextCode: string) => {
-      if (!canEdit) {
-        addTrace("HTTP SAVE blocked (locked_by_other)");
-        showToast("Сохранение заблокировано: lock у другого пользователя", "warn");
+  useEffect(() => {
+    if (!settingsReady) return;
+    if (settingsSaveTimer.current) window.clearTimeout(settingsSaveTimer.current);
+    settingsSaveTimer.current = window.setTimeout(() => {
+      void api.updateSettings(token, {
+        editor_font_size: 13,
+        preview_split: previewSplit,
+        sidebar_width: sidebarWidth,
+        trace_height: traceHeight,
+      });
+    }, 400);
+    return () => {
+      if (settingsSaveTimer.current) window.clearTimeout(settingsSaveTimer.current);
+    };
+  }, [previewSplit, settingsReady, sidebarWidth, token, traceHeight]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      if (drag.kind === "sidebar") {
+        const next = Math.max(180, Math.min(420, drag.base + (e.clientX - drag.startX)));
+        setSidebarWidth(Math.round(next));
         return;
       }
-      try {
-        const r = await api.saveRevision(token, docId, nextCode);
-        if (r.ok) {
-          setSvg(r.svg);
-          setRevision(r.revision);
-          addTrace(`HTTP SAVE /revisions rev=${r.revision}`);
-        }
-      } catch {
-        addTrace("HTTP SAVE rejected");
-        showToast("Сохранение отклонено (проверьте lock)", "warn");
+      if (drag.kind === "preview") {
+        const px = drag.base + (e.clientX - drag.startX);
+        const width = window.innerWidth - sidebarWidth - 36;
+        const ratio = width > 0 ? px / width : 0.5;
+        setPreviewSplit(Math.max(0.2, Math.min(0.8, ratio)));
+        return;
       }
-    },
-    [token, docId, setSvg, setRevision, canEdit]
-  );
+      const next = Math.max(80, Math.min(280, drag.base - (e.clientY - drag.startY)));
+      setTraceHeight(Math.round(next));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [sidebarWidth]);
 
-  const onChange = useMemo(
-    () => (next: string, caretLeft: number, caretRight: number) => {
-      setCode(next);
+  const saveNow = useCallback(async (nextCode: string) => {
+    if (!canEditRef.current) {
+      addTrace("HTTP SAVE blocked (locked_by_other)");
+      showToast("Сохранение заблокировано: lock у другого пользователя", "warn");
+      return;
+    }
 
-      if (wsState && wsState.isOpen() && canEdit) {
-        const prev = code;
-        wsState.sendReplaceRange(0, prev.length, next, caretLeft, caretRight);
-        addTrace(`OUT DOC_EDIT replace(0..${prev.length})`);
+    try {
+      const r = await api.saveRevision(token, docId, nextCode);
+      if (r.ok) {
+        setSvg(r.svg);
+        setRevision(r.revision);
+        lastSentCodeRef.current = nextCode;
+        addTrace(`HTTP SAVE /revisions rev=${r.revision}`);
       }
+    } catch {
+      addTrace("HTTP SAVE rejected");
+      showToast("Сохранение отклонено (проверьте lock)", "warn");
+    }
+  }, [addTrace, docId, setRevision, setSvg, showToast, token]);
 
-      if (debounce.current) window.clearTimeout(debounce.current);
-      debounce.current = window.setTimeout(async () => {
-        await saveNow(next);
-      }, 500);
-    },
-    [wsState, canEdit, code, setCode, saveNow]
-  );
+  const onChange = useCallback((next: string, caretLeft: number, caretRight: number) => {
+    const prev = codeRef.current;
+    setCode(next);
+    codeRef.current = next;
+    lastSentCodeRef.current = next;
+
+    if (wsRef.current && wsRef.current.isOpen() && canEditRef.current) {
+      wsRef.current.sendReplaceRange(0, prev.length, next, caretLeft, caretRight);
+      addTrace(`OUT DOC_EDIT replace(0..${prev.length})`);
+    }
+  }, [addTrace, setCode]);
 
   const toastClass =
     toast?.tone === "error"
@@ -277,6 +392,8 @@ export function StudioPage() {
       : toast?.tone === "warn"
       ? "border-amber-300 bg-amber-50 text-amber-700"
       : "border-accent-300 bg-accent-50 text-accent-700";
+
+  const editorPct = `${Math.round(previewSplit * 100)}%`;
 
   return (
     <div className="h-screen p-3">
@@ -328,22 +445,57 @@ export function StudioPage() {
           onSave={() => saveNow(code)}
         />
 
-        <div className="grid h-full grid-cols-[240px_1fr]">
-          <DocumentSidebar
-            docs={docs}
-            activeId={docId}
-            onPick={async (id) => {
-              if (id === docId) return;
-              setDocId(id);
-              const nextUrl = `${window.location.pathname}?doc=${id}`;
-              window.history.replaceState(null, "", nextUrl);
-              await loadDocument(id);
-            }}
-          />
+        <div className="min-h-0 flex-1">
+          <div className="grid h-full min-h-0" style={{ gridTemplateColumns: `${sidebarWidth}px 6px minmax(0,1fr)` }}>
+            <DocumentSidebar
+              docs={docs}
+              activeId={docId}
+              onPick={async (id) => {
+                if (id === docId) return;
+                setDocId(id);
+                const nextUrl = `${window.location.pathname}?doc=${id}`;
+                window.history.replaceState(null, "", nextUrl);
+                await loadDocument(id);
+              }}
+            />
 
-          <div className="grid h-full grid-cols-2">
-            <Editor code={code} onChange={onChange} readOnly={!canEdit} />
-            <Preview svg={svg} />
+            <div
+              className="cursor-col-resize border-l border-r border-black/10 bg-black/5 hover:bg-black/10"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                dragRef.current = { kind: "sidebar", startX: e.clientX, base: sidebarWidth };
+              }}
+            />
+
+            <div className="flex min-h-0 flex-col">
+              <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: `minmax(0,${editorPct}) 6px minmax(0,1fr)` }}>
+                <Editor code={code} onChange={onChange} readOnly={!canEdit} />
+                <div
+                  className="cursor-col-resize border-l border-r border-black/10 bg-black/5 hover:bg-black/10"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    dragRef.current = {
+                      kind: "preview",
+                      startX: e.clientX,
+                      base: previewSplit * (window.innerWidth - sidebarWidth - 36),
+                    };
+                  }}
+                />
+                <Preview svg={svg} />
+              </div>
+
+              <div
+                className="h-1 cursor-row-resize border-t border-black/10 bg-black/10 hover:bg-black/20"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  dragRef.current = { kind: "trace", startY: e.clientY, base: traceHeight };
+                }}
+              />
+
+              <div className="overflow-auto border-t border-black/10 bg-black/95 px-3 py-2 font-mono text-[11px] text-green-300" style={{ height: traceHeight }}>
+                {trace.length === 0 ? <div>WS trace is empty</div> : trace.map((line, i) => <div key={`${line}-${i}`}>{line}</div>)}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -371,10 +523,6 @@ export function StudioPage() {
                 </span>
               ))}
           </div>
-        </div>
-
-        <div className="h-28 overflow-auto border-t border-black/10 bg-black/95 px-3 py-2 font-mono text-[11px] text-green-300">
-          {trace.length === 0 ? <div>WS trace is empty</div> : trace.map((line, i) => <div key={`${line}-${i}`}>{line}</div>)}
         </div>
       </Panel>
 

@@ -82,6 +82,12 @@ Implementation delta (additive):
   to signal runtime WS availability.
 - A13 is actively used by UI Share action
   (copy link format: ?doc=<documentId>).
+- A8 returns latest preview payload when available:
+  preview:{svgPath:string|null, svg:string|null}
+  so Studio can show last rendered SVG before any new save/edit.
+- A3/A4 settings include layout persistence fields per user:
+  sidebar_width:int, trace_height:int, preview_split:float
+  (stored in user_settings and restored after re-login).
 end note
 
 @enduml

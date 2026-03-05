@@ -172,6 +172,8 @@ Implementation delta (additive):
   server emits ERROR {code:'locked_by_other'}.
 - Current editor client sends full-document replace in DOC_EDIT payload,
   and remote clients apply the incoming change.text directly.
+- If DOC_EDIT is rejected (DOC_EDIT_ACK {ok:false}),
+  server does not broadcast DOC_EDIT_APPLIED and does not start render.
 end note
 
 @enduml

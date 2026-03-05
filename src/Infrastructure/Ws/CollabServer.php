@@ -230,6 +230,9 @@ final class CollabServer implements MessageComponentInterface
       $this->ctx[$conn->resourceId]['caretRight'] = (int)($caret['right'] ?? $this->ctx[$conn->resourceId]['caretLeft']);
 
       $this->send($conn, 'DOC_EDIT_ACK', $result);
+      if (($result['ok'] ?? false) !== true) {
+        return;
+      }
 
       $this->broadcast($docId, 'DOC_EDIT_APPLIED', [
         'docId' => $docId,
@@ -243,6 +246,11 @@ final class CollabServer implements MessageComponentInterface
           'right' => $this->ctx[$conn->resourceId]['caretRight'],
         ],
       ], except: $conn);
+
+      // Reactive pipeline: each accepted edit triggers fresh render event for all clients.
+      // Minimal synchronous version now; can be moved to async worker/messenger later.
+      $render = $this->useCases->renderLatest($userId, $docId);
+      $this->broadcast($docId, 'DOC_RENDER_FINISHED', $render);
     } finally {
       $this->useCases->releaseLock($userId, $docId);
       $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => null]);

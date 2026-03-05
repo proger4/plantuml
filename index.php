@@ -72,6 +72,17 @@ function respond(int $status, array $data): void {
   exit;
 }
 
+function hasColumn(PDO $pdo, string $table, string $column): bool {
+  $st = $pdo->query("PRAGMA table_info($table)");
+  if (!$st) return false;
+  foreach ($st->fetchAll() ?: [] as $row) {
+    if ((string)($row['name'] ?? '') === $column) {
+      return true;
+    }
+  }
+  return false;
+}
+
 try {
   // Health
   if ($method === 'GET' && $path === '/health') {
@@ -112,12 +123,21 @@ try {
     $userId = authUserId($pdo);
     if ($userId <= 0) respond(401, ['ok' => false, 'error' => 'auth_required']);
 
-    $st = $pdo->prepare("SELECT editor_font_size, preview_split FROM user_settings WHERE user_id = :uid");
+    $hasSidebar = hasColumn($pdo, 'user_settings', 'sidebar_width');
+    $hasTrace = hasColumn($pdo, 'user_settings', 'trace_height');
+    $selectCols = "editor_font_size, preview_split";
+    if ($hasSidebar) $selectCols .= ", sidebar_width";
+    if ($hasTrace) $selectCols .= ", trace_height";
+    $st = $pdo->prepare("SELECT $selectCols FROM user_settings WHERE user_id = :uid");
     $st->execute([':uid' => $userId]);
-    $row = $st->fetch();
+    $row = $st->fetch() ?: [];
+    if (!array_key_exists('sidebar_width', $row)) $row['sidebar_width'] = 240;
+    if (!array_key_exists('trace_height', $row)) $row['trace_height'] = 112;
+    if (!array_key_exists('editor_font_size', $row)) $row['editor_font_size'] = 13;
+    if (!array_key_exists('preview_split', $row)) $row['preview_split'] = 0.5;
     respond(200, [
       'ok' => true,
-      'settings' => $row ?: ['editor_font_size' => 13, 'preview_split' => 0.5],
+      'settings' => $row,
     ]);
   }
 
@@ -129,18 +149,42 @@ try {
     $fontSize = max(11, min(22, (int)($b['editor_font_size'] ?? 13)));
     $split = (float)($b['preview_split'] ?? 0.5);
     $split = max(0.2, min(0.8, $split));
+    $sidebarWidth = max(180, min(420, (int)($b['sidebar_width'] ?? 240)));
+    $traceHeight = max(80, min(280, (int)($b['trace_height'] ?? 112)));
 
-    $st = $pdo->prepare("
-      INSERT INTO user_settings(user_id, editor_font_size, preview_split, updated_at)
-      VALUES(:uid, :fs, :split, datetime('now'))
-      ON CONFLICT(user_id) DO UPDATE SET
-        editor_font_size = excluded.editor_font_size,
-        preview_split = excluded.preview_split,
-        updated_at = excluded.updated_at
-    ");
-    $st->execute([':uid' => $userId, ':fs' => $fontSize, ':split' => $split]);
+    $hasSidebar = hasColumn($pdo, 'user_settings', 'sidebar_width');
+    $hasTrace = hasColumn($pdo, 'user_settings', 'trace_height');
 
-    respond(200, ['ok' => true, 'settings' => ['editor_font_size' => $fontSize, 'preview_split' => $split]]);
+    if ($hasSidebar && $hasTrace) {
+      $st = $pdo->prepare("
+        INSERT INTO user_settings(user_id, editor_font_size, preview_split, sidebar_width, trace_height, updated_at)
+        VALUES(:uid, :fs, :split, :sidebar, :trace, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+          editor_font_size = excluded.editor_font_size,
+          preview_split = excluded.preview_split,
+          sidebar_width = excluded.sidebar_width,
+          trace_height = excluded.trace_height,
+          updated_at = excluded.updated_at
+      ");
+      $st->execute([':uid' => $userId, ':fs' => $fontSize, ':split' => $split, ':sidebar' => $sidebarWidth, ':trace' => $traceHeight]);
+    } else {
+      $st = $pdo->prepare("
+        INSERT INTO user_settings(user_id, editor_font_size, preview_split, updated_at)
+        VALUES(:uid, :fs, :split, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+          editor_font_size = excluded.editor_font_size,
+          preview_split = excluded.preview_split,
+          updated_at = excluded.updated_at
+      ");
+      $st->execute([':uid' => $userId, ':fs' => $fontSize, ':split' => $split]);
+    }
+
+    respond(200, ['ok' => true, 'settings' => [
+      'editor_font_size' => $fontSize,
+      'preview_split' => $split,
+      'sidebar_width' => $sidebarWidth,
+      'trace_height' => $traceHeight
+    ]]);
   }
 
   if ($method === 'GET' && $path === '/api/me/documents') {
@@ -183,8 +227,8 @@ try {
   if ($method === 'GET' && preg_match('#^/api/documents/(\d+)$#', $path, $m)) {
     $docId = (int)$m[1];
     $userId = authUserId($pdo);
-    $doc = $useCases->getDocument($userId, $docId);
-    respond(200, ['ok' => true, 'document' => $doc]);
+    $payload = $useCases->getDocumentWithPreview($userId, $docId);
+    respond(200, ['ok' => true, ...$payload]);
   }
 
   if ($method === 'PUT' && preg_match('#^/api/documents/(\d+)$#', $path, $m)) {

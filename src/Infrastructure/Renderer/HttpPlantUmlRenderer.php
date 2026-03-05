@@ -28,11 +28,16 @@ final class HttpPlantUmlRenderer implements RendererGateway
         'header' => "Content-Type: text/plain; charset=utf-8\r\nAccept: image/svg+xml\r\n",
         'content' => $code,
         'timeout' => $this->timeoutSec,
+        'ignore_errors' => true,
       ],
     ]);
 
     $svg = @file_get_contents($this->endpoint, false, $context);
-    if ($svg === false || !str_contains($svg, '<svg')) {
+    $headers = function_exists('http_get_last_response_headers')
+      ? (http_get_last_response_headers() ?: [])
+      : [];
+    $status = $this->extractHttpStatus($headers);
+    if ($svg === false || !is_string($svg) || !str_contains($svg, '<svg')) {
       $reason = error_get_last()['message'] ?? 'renderer_unreachable';
       $errorSvg = $this->errorSvg($documentId, $revision, $reason);
       $path = rtrim($this->renderDir, '/') . "/doc_{$documentId}_rev_{$revision}.svg";
@@ -50,8 +55,19 @@ final class HttpPlantUmlRenderer implements RendererGateway
     return [
       'svgPath' => $path,
       'svg' => $svg,
-      'isValid' => true,
+      'isValid' => $status >= 200 && $status < 300,
     ];
+  }
+
+  private function extractHttpStatus(array $headers): int
+  {
+    $status = 0;
+    if (isset($headers[0]) && is_string($headers[0])) {
+      if (preg_match('/\s(\d{3})\s/', $headers[0], $m)) {
+        $status = (int)$m[1];
+      }
+    }
+    return $status;
   }
 
   private function errorSvg(int $documentId, int $revision, string $reason): string

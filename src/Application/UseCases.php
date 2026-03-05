@@ -5,6 +5,7 @@ namespace App\Application;
 
 use App\Collaborations\SessionManager;
 use App\DocumentApplier\DocumentApplier;
+use App\DocumentApplier\ApplierException;
 use App\Domain\Enum\ChangeType;
 use App\Domain\Enum\DocumentStatus;
 use App\Domain\Policy\RestrictionInterface;
@@ -32,6 +33,27 @@ final class UseCases
     $doc = $this->ports->documents->getById($docId);
     $this->assertAllowed($this->restrictions->canView($userId, $doc), 'forbidden');
     return $doc;
+  }
+
+  public function getDocumentWithPreview(int $userId, int $docId): array
+  {
+    $doc = $this->getDocument($userId, $docId);
+    $svgPath = $this->ports->documents->getLatestRenderedSvgPath($docId);
+    $svg = null;
+    if (is_string($svgPath) && $svgPath !== '' && is_file($svgPath)) {
+      $content = @file_get_contents($svgPath);
+      if ($content !== false) {
+        $svg = $content;
+      }
+    }
+
+    return [
+      'document' => $doc,
+      'preview' => [
+        'svgPath' => $svgPath,
+        'svg' => $svg,
+      ],
+    ];
   }
 
   public function joinSession(int $userId, int $docId): array
@@ -134,16 +156,43 @@ final class UseCases
       return ['ok' => false, 'error' => ['category' => 'bad_request', 'message' => 'change required']];
     }
 
-    $type = ChangeType::from((string)($ch['type'] ?? 'replace'));
-    $range = $ch['range'] ?? ['left' => 0, 'right' => 0];
-    $left = (int)($range['left'] ?? 0);
-    $right = (int)($range['right'] ?? $left);
-    $text = (string)($ch['text'] ?? '');
+    try {
+      $type = ChangeType::from((string)($ch['type'] ?? 'replace'));
+      $range = $ch['range'] ?? ['left' => 0, 'right' => 0];
+      $left = (int)($range['left'] ?? 0);
+      $right = (int)($range['right'] ?? $left);
+      $text = (string)($ch['text'] ?? '');
+    } catch (\ValueError $e) {
+      return [
+        'ok' => false,
+        'error' => ['category' => 'invalid_transition', 'message' => $e->getMessage()],
+      ];
+    }
 
-    $change = new TextChange($type, new CaretRange($left, $right), $text);
-
-    // Apply change to code
-    $applied = $this->applier->apply($doc['code'], $change);
+    try {
+      $change = new TextChange($type, new CaretRange($left, $right), $text);
+      $applied = $this->applier->apply($doc['code'], $change);
+    } catch (ApplierException $e) {
+      // Full-document replace is the transport format in current UI.
+      // If right bound is stale, normalize to current server code length.
+      if ($type === ChangeType::replace && $left === 0) {
+        try {
+          $safeRight = mb_strlen((string)$doc['code'], 'UTF-8');
+          $fallback = new TextChange($type, new CaretRange(0, $safeRight), $text);
+          $applied = $this->applier->apply($doc['code'], $fallback);
+        } catch (\Throwable $fallbackError) {
+          return [
+            'ok' => false,
+            'error' => ['category' => 'invalid_transition', 'message' => $fallbackError->getMessage()],
+          ];
+        }
+      } else {
+        return [
+          'ok' => false,
+          'error' => ['category' => 'invalid_transition', 'message' => $e->getMessage()],
+        ];
+      }
+    }
 
     $newRev = ((int)$doc['current_revision']) + 1;
     $this->ports->documents->saveCode($docId, $applied->code, $newRev, DocumentStatus::valid->value);

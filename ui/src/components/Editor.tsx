@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
 
 type Props = {
   code: string;
@@ -9,14 +9,29 @@ type Props = {
 
 export function Editor({ code, onChange, fontSize = 13, readOnly = false }: Props) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const selectionRef = useRef<{ left: number; right: number } | null>(null);
 
   const handle = useMemo(
     () => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const el = e.currentTarget;
-      onChange(el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0);
+      const left = el.selectionStart ?? 0;
+      const right = el.selectionEnd ?? 0;
+      selectionRef.current = { left, right };
+      onChange(el.value, left, right);
     },
     [onChange]
   );
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const sel = selectionRef.current;
+    if (!el || !sel) return;
+    if (document.activeElement !== el) return;
+    const max = el.value.length;
+    const left = Math.max(0, Math.min(max, sel.left));
+    const right = Math.max(left, Math.min(max, sel.right));
+    el.setSelectionRange(left, right);
+  }, [code]);
 
   return (
     <div className="flex h-full flex-col">

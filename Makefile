@@ -12,7 +12,7 @@ WS_PID := $(RUN_DIR)/ws.pid
 HTTP_LOG := $(LOG_DIR)/http.log
 WS_LOG := $(LOG_DIR)/ws.log
 
-.PHONY: help deps deps-soft migrate start start-http start-ws stop stop-http stop-ws status logs renderer-up renderer-down
+.PHONY: help deps deps-soft migrate start start-http start-ws stop stop-http stop-ws status logs renderer-up renderer-down test-backend
 
 help:
 	@echo "make start        # migrate DB + start backend (HTTP + WS)"
@@ -23,6 +23,7 @@ help:
 	@echo "make migrate      # run SQL migrations"
 	@echo "make renderer-up  # start PlantUML renderer docker service"
 	@echo "make renderer-up-soft # try start renderer, but do not fail"
+	@echo "make test-backend # run backend smoke tests"
 
 deps:
 	@if [ -f vendor/autoload.php ]; then \
@@ -117,3 +118,6 @@ renderer-up-soft:
 
 renderer-down:
 	docker compose stop plantuml-renderer
+
+test-backend: migrate renderer-up-soft
+	./test/smoke_backend.sh

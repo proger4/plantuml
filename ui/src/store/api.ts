@@ -6,6 +6,7 @@ import type {
   QuizRandomResponse,
   QuizSubmitResponse,
   SaveRevisionResponse,
+  SettingsResponse,
   StatsResponse,
 } from "../types/api";
 
@@ -45,6 +46,25 @@ export const api = {
   async getStats(token: string): Promise<StatsResponse> {
     const res = await fetch(`${API_BASE}/api/me/stats`, { headers: authHeaders(token) });
     return json<StatsResponse>(res);
+  },
+
+  async getSettings(token: string): Promise<SettingsResponse> {
+    const res = await fetch(`${API_BASE}/api/me/settings`, { headers: authHeaders(token) });
+    return json<SettingsResponse>(res);
+  },
+
+  async updateSettings(token: string, settings: {
+    editor_font_size: number;
+    preview_split: number;
+    sidebar_width: number;
+    trace_height: number;
+  }): Promise<SettingsResponse> {
+    const res = await fetch(`${API_BASE}/api/me/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(settings),
+    });
+    return json<SettingsResponse>(res);
   },
 
   async joinSession(token: string, documentId: number): Promise<JoinSessionResponse> {
