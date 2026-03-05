@@ -45,8 +45,8 @@ function jsonBody(): array {
   return is_array($d) ? $d : [];
 }
 
-function issueToken(int $userId, string $name): string {
-  return base64_encode($userId . ':' . $name);
+function issueToken(int $userId, string $name, string $color): string {
+  return base64_encode($userId . ':' . $name . ':' . $color);
 }
 
 function authUserId(PDO $pdo): int {
@@ -87,7 +87,7 @@ try {
       respond(400, ['ok' => false, 'error' => 'name/password required']);
     }
 
-    $st = $pdo->prepare("SELECT id, name, password_hash FROM users WHERE name = :name");
+    $st = $pdo->prepare("SELECT id, name, password_hash, color FROM users WHERE name = :name");
     $st->execute([':name' => $name]);
     $user = $st->fetch();
     if (!$user || !password_verify($password, (string)$user['password_hash'])) {
@@ -95,8 +95,12 @@ try {
     }
 
     respond(200, [
-      'token' => issueToken((int)$user['id'], (string)$user['name']),
-      'user' => ['id' => (int)$user['id'], 'name' => (string)$user['name']],
+      'token' => issueToken((int)$user['id'], (string)$user['name'], (string)($user['color'] ?? '#f59e0b')),
+      'user' => [
+        'id' => (int)$user['id'],
+        'name' => (string)$user['name'],
+        'color' => (string)($user['color'] ?? '#f59e0b'),
+      ],
     ]);
   }
 
@@ -250,10 +254,12 @@ try {
     if ($docId <= 0) respond(400, ['ok' => false, 'error' => 'documentId required']);
 
     $s = $useCases->joinSession($userId, $docId);
+    $wsEnabled = interface_exists(\Ratchet\MessageComponentInterface::class);
     respond(200, [
       'ok' => true,
       'sessionId' => $s['sessionId'],
-      'wsUrl' => $s['wsUrl'],
+      'wsEnabled' => $wsEnabled,
+      'wsUrl' => $wsEnabled ? $s['wsUrl'] : null,
       'docId' => $docId,
     ]);
   }
@@ -327,5 +333,17 @@ try {
 
   respond(404, ['ok' => false, 'error' => 'not_found', 'path' => $path]);
 } catch (Throwable $e) {
+  if ($e->getMessage() === 'locked_by_other') {
+    respond(409, ['ok' => false, 'error' => 'locked_by_other']);
+  }
+  if ($e->getMessage() === 'invalid_transition') {
+    respond(409, ['ok' => false, 'error' => 'invalid_transition']);
+  }
+  if ($e->getMessage() === 'auth_required') {
+    respond(401, ['ok' => false, 'error' => 'auth_required']);
+  }
+  if ($e->getMessage() === 'Forbidden' || $e->getMessage() === 'forbidden') {
+    respond(403, ['ok' => false, 'error' => 'forbidden']);
+  }
   respond(500, ['ok' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
 }

@@ -76,4 +76,12 @@ A16 POST   /api/quizzes/random
 A17 POST   /api/quizzes/{id}/submit      { tryoutRevisionId | code }
 end note
 
+note left
+Implementation delta (additive):
+- A15 currently returns wsEnabled:boolean and wsUrl:string|null
+  to signal runtime WS availability.
+- A13 is actively used by UI Share action
+  (copy link format: ?doc=<documentId>).
+end note
+
 @enduml

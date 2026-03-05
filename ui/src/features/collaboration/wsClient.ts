@@ -2,7 +2,12 @@ import type { WsEnvelope } from "../../types/ws";
 
 export type WsHandlers = {
   onSnapshot: (p: any) => void;
+  onLockAcquired: (p: any) => void;
+  onLockReleased: (p: any) => void;
+  onEditAck: (p: any) => void;
   onEditApplied: (p: any) => void;
+  onCollaboratorJoin: (p: any) => void;
+  onCollaboratorLeave: (p: any) => void;
   onRenderFinished: (p: any) => void;
   onLockChanged: (p: any) => void;
   onError: (p: any) => void;
@@ -49,8 +54,23 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
       case "DOC_SNAPSHOT":
         handlers.onSnapshot(msg.payload);
         break;
+      case "LOCK_ACQUIRED":
+        handlers.onLockAcquired(msg.payload);
+        break;
+      case "LOCK_RELEASED":
+        handlers.onLockReleased(msg.payload);
+        break;
       case "DOC_EDIT_APPLIED":
         handlers.onEditApplied(msg.payload);
+        break;
+      case "DOC_COLLABORATOR_JOIN":
+        handlers.onCollaboratorJoin(msg.payload);
+        break;
+      case "DOC_COLLABORATOR_LEAVE":
+        handlers.onCollaboratorLeave(msg.payload);
+        break;
+      case "DOC_EDIT_ACK":
+        handlers.onEditAck(msg.payload);
         break;
       case "DOC_RENDER_FINISHED":
         handlers.onRenderFinished(msg.payload);
@@ -100,12 +120,12 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
      *   - backspace/delete mapping to replace with empty text
      * - send ChangeType insert/replace with precise range.
      */
-    sendFullReplace(code: string, caretLeft: number, caretRight: number) {
+    sendReplaceRange(left: number, right: number, text: string, caretLeft: number, caretRight: number) {
       sendRaw(
         JSON.stringify({
           event: "DOC_EDIT",
           payload: {
-            change: { type: "replace", range: { left: 0, right: code.length }, text: code },
+            change: { type: "replace", range: { left, right }, text },
             caret: { left: caretLeft, right: caretRight },
           },
         })

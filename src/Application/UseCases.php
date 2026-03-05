@@ -30,20 +30,14 @@ final class UseCases
   public function getDocument(int $userId, int $docId): array
   {
     $doc = $this->ports->documents->getById($docId);
-    [$ok] = $this->restrictions->canView($userId, $doc);
-    if (!$ok) {
-      throw new \RuntimeException('Forbidden');
-    }
+    $this->assertAllowed($this->restrictions->canView($userId, $doc), 'forbidden');
     return $doc;
   }
 
   public function joinSession(int $userId, int $docId): array
   {
     $doc = $this->ports->documents->getById($docId);
-    [$ok] = $this->restrictions->canView($userId, $doc);
-    if (!$ok) {
-      throw new \RuntimeException('Forbidden');
-    }
+    $this->assertAllowed($this->restrictions->canView($userId, $doc), 'forbidden');
 
     $sessionId = $this->ports->sessions->ensure($docId);
     return [
@@ -101,6 +95,8 @@ final class UseCases
 
   public function acquireLock(int $userId, int $docId): void
   {
+    $current = $this->ports->sessions->getLock($docId);
+    $this->assertAllowed($this->restrictions->canAcquireLock($userId, $docId, $current));
     // TODO: add lease timeout.
     $this->ports->sessions->upsertLock($docId, $userId);
   }
@@ -172,8 +168,8 @@ final class UseCases
   public function saveRevisionAndRender(int $userId, int $docId, string $code): array
   {
     $doc = $this->ports->documents->getById($docId);
-    [$ok] = $this->restrictions->canView($userId, $doc);
-    if (!$ok) throw new \RuntimeException('Forbidden');
+    $lockUserId = $this->ports->sessions->getLock($docId);
+    $this->assertAllowed($this->restrictions->canSaveRevision($userId, $doc, $lockUserId), 'forbidden');
 
     $newRev = ((int)$doc['current_revision']) + 1;
     $render = $this->ports->renderer->renderSvg($docId, $newRev, $code);
@@ -211,5 +207,13 @@ final class UseCases
       'svgPath' => (string)$render['svgPath'],
       'svg' => (string)$render['svg'],
     ];
+  }
+
+  private function assertAllowed(array $decision, string $defaultError = 'forbidden'): void
+  {
+    [$ok, $cat] = $decision + [false, null, null];
+    if ($ok) return;
+    $code = $cat?->value ?? $defaultError;
+    throw new \RuntimeException($code);
   }
 }

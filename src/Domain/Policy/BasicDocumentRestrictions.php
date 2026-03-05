@@ -31,6 +31,17 @@ final class BasicDocumentRestrictions implements RestrictionInterface
     return [true, null, null];
   }
 
+  public function canAcquireLock(int $userId, int $documentId, ?int $lockUserId): array
+  {
+    if ($userId <= 0) {
+      return [false, RestrictionCategory::auth_required, 'Auth required'];
+    }
+    if ($lockUserId !== null && $lockUserId !== $userId) {
+      return [false, RestrictionCategory::locked_by_other, 'Locked by another user'];
+    }
+    return [true, null, null];
+  }
+
   public function canView(int $userId, array $documentRow): array
   {
     if ((int)$documentRow['is_deleted'] === 1) {
@@ -43,5 +54,20 @@ final class BasicDocumentRestrictions implements RestrictionInterface
       return [true, null, null];
     }
     return [false, RestrictionCategory::forbidden, 'Not allowed'];
+  }
+
+  public function canSaveRevision(int $userId, array $documentRow, ?int $lockUserId): array
+  {
+    [$canView, $cat, $msg] = $this->canView($userId, $documentRow);
+    if (!$canView) {
+      return [$canView, $cat, $msg];
+    }
+    if ($userId <= 0) {
+      return [false, RestrictionCategory::auth_required, 'Auth required'];
+    }
+    if ($lockUserId !== null && $lockUserId !== $userId) {
+      return [false, RestrictionCategory::locked_by_other, 'Locked by another user'];
+    }
+    return [true, null, null];
   }
 }

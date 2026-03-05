@@ -4,9 +4,10 @@ type Props = {
   code: string;
   onChange: (next: string, caretLeft: number, caretRight: number) => void;
   fontSize?: number;
+  readOnly?: boolean;
 };
 
-export function Editor({ code, onChange, fontSize = 13 }: Props) {
+export function Editor({ code, onChange, fontSize = 13, readOnly = false }: Props) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   const handle = useMemo(
@@ -24,8 +25,9 @@ export function Editor({ code, onChange, fontSize = 13 }: Props) {
         ref={ref}
         value={code}
         onChange={handle}
+        readOnly={readOnly}
         style={{ fontSize }}
-        className="h-full w-full resize-none border-none bg-white/70 p-3 font-mono leading-6 text-ink outline-none"
+        className={`h-full w-full resize-none border-none p-3 font-mono leading-6 text-ink outline-none ${readOnly ? "bg-black/5" : "bg-white/70"}`}
       />
     </div>
   );

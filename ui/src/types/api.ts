@@ -1,4 +1,4 @@
-export type LoginResponse = { token: string; user: { id: number; name: string } };
+export type LoginResponse = { token: string; user: { id: number; name: string; color?: string } };
 
 export type DocumentRow = {
   id: number;
@@ -27,7 +27,8 @@ export type SaveRevisionResponse = {
 export type JoinSessionResponse = {
   ok: boolean;
   sessionId: number;
-  wsUrl: string;
+  wsEnabled: boolean;
+  wsUrl: string | null;
   docId: number;
 };
 

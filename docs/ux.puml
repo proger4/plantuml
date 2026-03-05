@@ -60,4 +60,13 @@ Atomic actions (deterministic):
    - POST /api/quizzes/{id}/submit {code}
 end note
 
+note left of Top
+Implementation delta (additive):
+- TopBar has explicit "+" entrypoints:
+  + New document, + Random quiz
+- Share action publishes current document
+  and copies URL with ?doc=<id>.
+- Studio shows WS trace panel for live protocol diagnostics.
+end note
+
 @enduml

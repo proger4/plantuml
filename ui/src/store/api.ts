@@ -74,6 +74,15 @@ export const api = {
     return json<GetDocumentResponse>(res);
   },
 
+  async publishDocument(token: string, documentId: number): Promise<GetDocumentResponse> {
+    const res = await fetch(`${API_BASE}/api/documents/${documentId}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ isPublic: true }),
+    });
+    return json<GetDocumentResponse>(res);
+  },
+
   async startQuiz(token: string): Promise<QuizRandomResponse> {
     const res = await fetch(`${API_BASE}/api/quizzes/random`, {
       method: "POST",

@@ -13,7 +13,20 @@ type Story = StoryObj;
 export const Chrome: Story = {
   render: () => (
     <div className="h-screen bg-paper">
-      <TopBar docId={1} revision={3} lockUserId={1} meId={1} userName="ivan" onSave={() => {}} onRender={() => {}} />
+      <TopBar
+        docId={1}
+        revision={3}
+        lockUserId={1}
+        meId={1}
+        userName="ivan"
+        wsEnabled
+        onSave={() => {}}
+        onRender={() => {}}
+        onShare={() => {}}
+        onNewDocument={() => {}}
+        onRandomQuiz={() => {}}
+        onLogout={() => {}}
+      />
       <div className="h-[calc(100vh-56px)] w-80">
         <DocumentSidebar
           activeId={1}

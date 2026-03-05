@@ -166,4 +166,12 @@ Domain/internal events (backend_internal) that may exist behind WS:
 These can be implemented via Symfony EventDispatcher/Messenger later.
 end note
 
+note left
+Implementation delta (additive):
+- acquire_lock is now guarded: if lock is owned by another user,
+  server emits ERROR {code:'locked_by_other'}.
+- Current editor client sends full-document replace in DOC_EDIT payload,
+  and remote clients apply the incoming change.text directly.
+end note
+
 @enduml

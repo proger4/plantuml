@@ -26,7 +26,7 @@ use Ratchet\MessageComponentInterface;
  */
 final class CollabServer implements MessageComponentInterface
 {
-  /** @var array<int, array{userId:int, docId:int|null}> */
+  /** @var array<int, array{userId:int, docId:int|null, name:string, color:string, caretLeft:int, caretRight:int}> */
   private array $ctx = [];
 
   public function __construct(
@@ -36,7 +36,14 @@ final class CollabServer implements MessageComponentInterface
 
   public function onOpen(ConnectionInterface $conn): void
   {
-    $this->ctx[$conn->resourceId] = ['userId' => 0, 'docId' => null];
+    $this->ctx[$conn->resourceId] = [
+      'userId' => 0,
+      'docId' => null,
+      'name' => 'unknown',
+      'color' => '#9ca3af',
+      'caretLeft' => 0,
+      'caretRight' => 0,
+    ];
     $this->send($conn, 'HELLO', ['server' => 'plantuml-studio-ws']);
   }
 
@@ -83,13 +90,19 @@ final class CollabServer implements MessageComponentInterface
     $token = (string)($p['token'] ?? '');
     $decoded = base64_decode($token, true);
     $userId = 0;
+    $name = 'unknown';
+    $color = '#9ca3af';
     if (is_string($decoded)) {
-      [$id] = array_pad(explode(':', $decoded, 2), 2, '');
+      [$id, $tokenName, $tokenColor] = array_pad(explode(':', $decoded, 3), 3, '');
       $userId = max(0, (int)$id);
+      if ($tokenName !== '') $name = $tokenName;
+      if ($tokenColor !== '') $color = $tokenColor;
     }
 
     $this->ctx[$conn->resourceId]['userId'] = $userId;
-    $this->send($conn, 'AUTH_ACK', ['userId' => $userId]);
+    $this->ctx[$conn->resourceId]['name'] = $name;
+    $this->ctx[$conn->resourceId]['color'] = $color;
+    $this->send($conn, 'AUTH_ACK', ['userId' => $userId, 'name' => $name, 'color' => $color]);
   }
 
   private function handleJoin(ConnectionInterface $conn, array $p): void
@@ -116,11 +129,18 @@ final class CollabServer implements MessageComponentInterface
       'code' => $doc['code'],
       'revision' => (int)$doc['current_revision'],
       'lockUserId' => $this->useCases->getLockUserId($docId),
+      'collaborators' => $this->collaborators($docId),
     ]);
 
     $this->broadcast($docId, 'DOC_COLLABORATOR_JOIN', [
       'docId' => $docId,
       'userId' => $userId,
+      'name' => $this->ctx[$conn->resourceId]['name'],
+      'color' => $this->ctx[$conn->resourceId]['color'],
+      'caret' => [
+        'left' => $this->ctx[$conn->resourceId]['caretLeft'],
+        'right' => $this->ctx[$conn->resourceId]['caretRight'],
+      ],
     ], except: $conn);
   }
 
@@ -129,11 +149,18 @@ final class CollabServer implements MessageComponentInterface
     $docId = $this->ctx[$conn->resourceId]['docId'];
     $userId = $this->ctx[$conn->resourceId]['userId'];
     if ($docId) {
+      $lockUserId = $this->useCases->getLockUserId((int)$docId);
+      if ($lockUserId !== null && $lockUserId === (int)$userId) {
+        $this->useCases->releaseLock((int)$userId, (int)$docId);
+        $this->broadcast((int)$docId, 'LOCK_CHANGED', ['docId' => (int)$docId, 'lockUserId' => null]);
+      }
+
       $this->sessions->leave((int)$docId, $conn);
 
       $this->broadcast((int)$docId, 'DOC_COLLABORATOR_LEAVE', [
         'docId' => (int)$docId,
         'userId' => (int)$userId,
+        'name' => $this->ctx[$conn->resourceId]['name'] ?? 'unknown',
       ], except: $conn);
     }
     $this->ctx[$conn->resourceId]['docId'] = null;
@@ -151,16 +178,24 @@ final class CollabServer implements MessageComponentInterface
     }
 
     if ($action === 'acquire_lock') {
-      $this->useCases->acquireLock($userId, $docId);
+      try {
+        $this->useCases->acquireLock($userId, $docId);
+      } catch (\RuntimeException $e) {
+        if ($e->getMessage() === 'locked_by_other') {
+          $this->sendError($conn, 'locked_by_other', 'Locked by another user');
+          return;
+        }
+        throw $e;
+      }
       $this->send($conn, 'LOCK_ACQUIRED', ['docId' => $docId, 'userId' => $userId]);
-      $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => $userId], except: $conn);
+      $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => $userId]);
       return;
     }
 
     if ($action === 'release_lock') {
       $this->useCases->releaseLock($userId, $docId);
       $this->send($conn, 'LOCK_RELEASED', ['docId' => $docId, 'userId' => $userId]);
-      $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => null], except: $conn);
+      $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => null]);
       return;
     }
 
@@ -176,16 +211,42 @@ final class CollabServer implements MessageComponentInterface
       return;
     }
 
-    $result = $this->useCases->applyEdit($userId, $docId, $p);
+    // Transactional lock window: acquire -> apply -> release.
+    try {
+      $this->useCases->acquireLock($userId, $docId);
+      $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => $userId]);
+    } catch (\RuntimeException $e) {
+      if ($e->getMessage() === 'locked_by_other') {
+        $this->sendError($conn, 'locked_by_other', 'Locked by another user');
+        return;
+      }
+      throw $e;
+    }
 
-    $this->send($conn, 'DOC_EDIT_ACK', $result);
+    try {
+      $result = $this->useCases->applyEdit($userId, $docId, $p);
+      $caret = is_array($p['caret'] ?? null) ? $p['caret'] : ['left' => 0, 'right' => 0];
+      $this->ctx[$conn->resourceId]['caretLeft'] = (int)($caret['left'] ?? 0);
+      $this->ctx[$conn->resourceId]['caretRight'] = (int)($caret['right'] ?? $this->ctx[$conn->resourceId]['caretLeft']);
 
-    $this->broadcast($docId, 'DOC_EDIT_APPLIED', [
-      'docId' => $docId,
-      'userId' => $userId,
-      'change' => $p['change'] ?? null,
-      'revision' => $result['revision'] ?? null,
-    ], except: $conn);
+      $this->send($conn, 'DOC_EDIT_ACK', $result);
+
+      $this->broadcast($docId, 'DOC_EDIT_APPLIED', [
+        'docId' => $docId,
+        'userId' => $userId,
+        'name' => $this->ctx[$conn->resourceId]['name'],
+        'color' => $this->ctx[$conn->resourceId]['color'],
+        'change' => $p['change'] ?? null,
+        'revision' => $result['revision'] ?? null,
+        'caret' => [
+          'left' => $this->ctx[$conn->resourceId]['caretLeft'],
+          'right' => $this->ctx[$conn->resourceId]['caretRight'],
+        ],
+      ], except: $conn);
+    } finally {
+      $this->useCases->releaseLock($userId, $docId);
+      $this->broadcast($docId, 'LOCK_CHANGED', ['docId' => $docId, 'lockUserId' => null]);
+    }
   }
 
   private function handleRender(ConnectionInterface $conn, array $p): void
@@ -217,5 +278,21 @@ final class CollabServer implements MessageComponentInterface
   private function sendError(ConnectionInterface $conn, string $code, string $message): void
   {
     $this->send($conn, 'ERROR', ['code' => $code, 'message' => $message]);
+  }
+
+  private function collaborators(int $docId): array
+  {
+    $list = [];
+    foreach ($this->sessions->connections($docId) as $conn) {
+      $ctx = $this->ctx[$conn->resourceId] ?? null;
+      if (!$ctx || $ctx['userId'] <= 0) continue;
+      $list[] = [
+        'userId' => $ctx['userId'],
+        'name' => $ctx['name'],
+        'color' => $ctx['color'],
+        'caret' => ['left' => $ctx['caretLeft'], 'right' => $ctx['caretRight']],
+      ];
+    }
+    return $list;
   }
 }
