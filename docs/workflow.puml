@@ -32,4 +32,10 @@ DOC_RENDER_FINISHED:
 - store error details (optional)
 end note
 
+note bottom
+Implementation delta (MVP runtime):
+- document.status currently stays 'valid' in saveRevisionAndRender,
+  while render validity is tracked in revisions.is_valid + svg output.
+end note
+
 @enduml

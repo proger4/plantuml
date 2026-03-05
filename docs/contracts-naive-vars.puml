@@ -134,6 +134,7 @@ class Api_JoinSession_Request {
 class Api_JoinSession_Response {
   +ok: bool
   +sessionId: int
+  +wsEnabled: bool
   +wsUrl: string
   +docId: int
 }
@@ -159,6 +160,12 @@ end note
 note bottom of WsEnvelope
 Recommended: include correlationId for ACK matching.
 mark determines delivery semantics.
+end note
+
+note left of Api_GetDocument_Response
+Implementation delta (additive):
+- runtime response may include preview:
+  {svgPath:string|null, svg:string|null}
 end note
 
 @enduml

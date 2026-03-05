@@ -60,4 +60,12 @@ Implementation options:
 - Symfony Messenger (async render/jobs)
 end note
 
+note bottom
+Implementation delta (MVP runtime):
+- Most use cases are currently consolidated into one UseCases facade class.
+- Auth/settings/stats/quiz endpoints are currently handled
+  directly in index.php SQL handlers.
+- Diagram keeps target decomposition for planned refactor.
+end note
+
 @enduml

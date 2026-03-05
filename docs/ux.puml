@@ -67,6 +67,8 @@ Implementation delta (additive):
 - Share action publishes current document
   and copies URL with ?doc=<id>.
 - Studio shows WS trace panel for live protocol diagnostics.
+- Current codebase keeps state mainly in authStore + studioStore;
+  other stores remain target decomposition.
 end note
 
 @enduml

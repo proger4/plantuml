@@ -53,4 +53,13 @@ Backend -> UI (personal):
 - *_ACK, errors, initial snapshot
 end note
 
+note left of W
+Implementation delta (MVP runtime):
+- JOIN ack currently is DOC_SNAPSHOT (not personal DOC_COLLABORATOR_JOIN).
+- DOC_EDIT payload in client currently omits docId/baseRevision;
+  server resolves docId from joined connection context.
+- Server acquires/releases lock around each DOC_EDIT transaction
+  and emits LOCK_CHANGED accordingly.
+end note
+
 @enduml

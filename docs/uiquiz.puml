@@ -24,4 +24,11 @@ US -> RG : renderSvg(tryoutCode)
 US -> DB : load requiredDocument.code\nrenderSvg(requiredCode)
 US -> DB : insert Attempt(score,...)
 QC --> UI : {score, isPass, diffHint?, requiredSvg? (optional)}
+
+note right
+Implementation delta (MVP runtime):
+- Quiz endpoints are currently handled in index.php (without dedicated controller/usecase classes).
+- Scoring is strict trimmed-text equality.
+- Tryout revision is currently saved via saveRevisionAndRender(userId, docId=1, code).
+end note
 @enduml

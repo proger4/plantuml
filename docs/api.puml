@@ -88,6 +88,10 @@ Implementation delta (additive):
 - A3/A4 settings include layout persistence fields per user:
   sidebar_width:int, trace_height:int, preview_split:float
   (stored in user_settings and restored after re-login).
+- A9 currently updates metadata only (isPublic/slug);
+  document code updates are handled via WS edits or A14 save revision.
+- A17 runtime currently accepts {code} path only;
+  tryoutRevisionId branch is kept as architectural target.
 end note
 
 @enduml

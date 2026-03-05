@@ -30,6 +30,14 @@ Zustand stores:
 - quizStore
 end note
 
+note left of api
+Implementation delta (MVP runtime):
+- Current test runtime uses index.php + PDO repositories
+  instead of full Symfony HTTP kernel + Doctrine wiring.
+- Target architecture on this sheet remains valid
+  as migration direction.
+end note
+
 package "Sheets Map (1..8)" as sheets {
   rectangle "1 Context" as S1
   rectangle "2 Domain" as S2
