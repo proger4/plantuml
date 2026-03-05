@@ -10,10 +10,37 @@ export type WsHandlers = {
 
 export function connectCollab(wsUrl: string, token: string, documentId: number, handlers: WsHandlers) {
   const ws = new WebSocket(wsUrl);
+  const queue: string[] = [];
+  let open = false;
+  let closed = false;
+  let resolveReady: (() => void) | null = null;
+  let rejectReady: ((reason?: unknown) => void) | null = null;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+
+  const sendRaw = (payload: string) => {
+    if (closed) return;
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(payload);
+      return;
+    }
+    if (ws.readyState === WebSocket.CONNECTING) {
+      queue.push(payload);
+    }
+  };
 
   ws.onopen = () => {
-    ws.send(JSON.stringify({ event: "AUTH", payload: { token } }));
-    ws.send(JSON.stringify({ event: "JOIN", payload: { documentId } }));
+    open = true;
+    sendRaw(JSON.stringify({ event: "AUTH", payload: { token } }));
+    sendRaw(JSON.stringify({ event: "JOIN", payload: { documentId } }));
+    while (queue.length > 0) {
+      const payload = queue.shift();
+      if (!payload) break;
+      ws.send(payload);
+    }
+    resolveReady?.();
   };
 
   ws.onmessage = (ev) => {
@@ -37,13 +64,30 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
     }
   };
 
+  ws.onerror = () => {
+    if (!open) {
+      rejectReady?.(new Error("ws_connect_failed"));
+    }
+  };
+
+  ws.onclose = () => {
+    closed = true;
+    if (!open) {
+      rejectReady?.(new Error("ws_closed_before_open"));
+    }
+  };
+
   return {
     ws,
+    ready,
+    isOpen() {
+      return ws.readyState === WebSocket.OPEN;
+    },
     acquireLock() {
-      ws.send(JSON.stringify({ event: "DOC_COLLABORATOR_ACTION", payload: { action: "acquire_lock" } }));
+      sendRaw(JSON.stringify({ event: "DOC_COLLABORATOR_ACTION", payload: { action: "acquire_lock" } }));
     },
     releaseLock() {
-      ws.send(JSON.stringify({ event: "DOC_COLLABORATOR_ACTION", payload: { action: "release_lock" } }));
+      sendRaw(JSON.stringify({ event: "DOC_COLLABORATOR_ACTION", payload: { action: "release_lock" } }));
     },
     /**
      * MVP edit strategy (deliberately naive):
@@ -57,7 +101,7 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
      * - send ChangeType insert/replace with precise range.
      */
     sendFullReplace(code: string, caretLeft: number, caretRight: number) {
-      ws.send(
+      sendRaw(
         JSON.stringify({
           event: "DOC_EDIT",
           payload: {
@@ -68,11 +112,14 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
       );
     },
     requestRender() {
-      ws.send(JSON.stringify({ event: "DOC_RENDER_REQUEST", payload: {} }));
+      sendRaw(JSON.stringify({ event: "DOC_RENDER_REQUEST", payload: {} }));
     },
     close() {
-      ws.send(JSON.stringify({ event: "LEAVE", payload: {} }));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: "LEAVE", payload: {} }));
+      }
       ws.close();
+      closed = true;
     },
   };
 }

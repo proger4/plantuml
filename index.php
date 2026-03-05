@@ -6,7 +6,21 @@ declare(strict_types=1);
  * TODO: replace this file with Symfony HTTP kernel + controllers.
  */
 
-require __DIR__ . '/vendor/autoload.php';
+if (is_file(__DIR__ . '/vendor/autoload.php')) {
+  require __DIR__ . '/vendor/autoload.php';
+} else {
+  spl_autoload_register(static function (string $class): void {
+    $prefix = 'App\\';
+    if (!str_starts_with($class, $prefix)) {
+      return;
+    }
+    $relative = substr($class, strlen($prefix));
+    $file = __DIR__ . '/src/' . str_replace('\\', '/', $relative) . '.php';
+    if (is_file($file)) {
+      require $file;
+    }
+  });
+}
 
 $container = require __DIR__ . '/src/bootstrap.php';
 $useCases = $container['useCases'];

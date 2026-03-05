@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (!is_file(__DIR__ . '/vendor/autoload.php')) {
+  fwrite(STDERR, "vendor/autoload.php not found. Run `composer install` to start WS server.\n");
+  exit(1);
+}
 require __DIR__ . '/vendor/autoload.php';
 
 use Ratchet\Http\HttpServer;
@@ -19,6 +23,10 @@ use React\Socket\SocketServer;
  */
 $container = require __DIR__ . '/src/bootstrap.php';
 $ws = $container['ws'];
+if ($ws === null) {
+  fwrite(STDERR, "WS service is unavailable: Ratchet dependencies are not installed.\n");
+  exit(1);
+}
 
 $loop = Loop::get();
 $socket = new SocketServer('0.0.0.0:8081', [], $loop);

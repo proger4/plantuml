@@ -57,7 +57,10 @@ return (function (): array {
 
   $useCases = new UseCases($ports, $restrictions, $sessionManager, $applier);
 
-  $ws = new CollabServer($useCases, $sessionManager);
+  $ws = null;
+  if (interface_exists(\Ratchet\MessageComponentInterface::class)) {
+    $ws = new CollabServer($useCases, $sessionManager);
+  }
 
   return [
     'db' => $db,

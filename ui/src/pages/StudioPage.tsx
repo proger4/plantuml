@@ -31,6 +31,7 @@ export function StudioPage() {
   const setQuizId = useStudioStore((s) => s.setQuizId);
 
   const [wsState, setWsState] = useState<ReturnType<typeof connectCollab> | null>(null);
+  const [wsEnabled, setWsEnabled] = useState(true);
   const [stats, setStats] = useState<{ revisions: number; attempts: number } | null>(null);
   const debounce = useRef<number | null>(null);
 
@@ -65,7 +66,14 @@ export function StudioPage() {
       });
 
       setWsState(conn);
-      conn.acquireLock();
+      try {
+        await conn.ready;
+        setWsEnabled(true);
+        conn.acquireLock();
+      } catch {
+        setWsEnabled(false);
+        console.warn("WS unavailable, running in HTTP-only mode");
+      }
     },
     [setCode, setLock, setRevision, setSnapshot, setSvg, token, wsState]
   );
@@ -103,7 +111,7 @@ export function StudioPage() {
     () => (next: string, caretLeft: number, caretRight: number) => {
       setCode(next);
 
-      if (wsState && canEdit) {
+      if (wsState && wsState.isOpen() && canEdit) {
         wsState.sendFullReplace(next, caretLeft, caretRight);
       }
 
@@ -124,7 +132,7 @@ export function StudioPage() {
           lockUserId={lockUserId}
           meId={user.id}
           userName={user.name}
-          onRender={() => wsState?.requestRender()}
+          onRender={() => wsState?.isOpen() && wsState.requestRender()}
           onSave={() => saveNow(code)}
         />
 
@@ -168,6 +176,7 @@ export function StudioPage() {
           >
             Submit quiz
           </button>
+          {!wsEnabled && <span className="text-amber-700">WS offline: collab disabled, HTTP save active</span>}
           {!canEdit && <span className="text-red-600">Документ заблокирован другим пользователем</span>}
         </div>
       </Panel>
