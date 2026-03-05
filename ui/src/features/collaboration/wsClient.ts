@@ -10,6 +10,7 @@ export type WsHandlers = {
   onCollaboratorLeave: (p: any) => void;
   onRenderFinished: (p: any) => void;
   onLockChanged: (p: any) => void;
+  onViewState: (p: any) => void;
   onError: (p: any) => void;
 };
 
@@ -78,6 +79,9 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
       case "LOCK_CHANGED":
         handlers.onLockChanged(msg.payload);
         break;
+      case "DOC_VIEW_STATE":
+        handlers.onViewState(msg.payload);
+        break;
       case "ERROR":
         handlers.onError(msg.payload);
         break;
@@ -133,6 +137,9 @@ export function connectCollab(wsUrl: string, token: string, documentId: number, 
     },
     requestRender() {
       sendRaw(JSON.stringify({ event: "DOC_RENDER_REQUEST", payload: {} }));
+    },
+    sendViewState(payload: { view?: { zoom: number; nx: number; ny: number }; cursor?: { x: number; y: number; visible: boolean } }) {
+      sendRaw(JSON.stringify({ event: "DOC_VIEW_STATE", payload }));
     },
     close() {
       if (ws.readyState === WebSocket.OPEN) {

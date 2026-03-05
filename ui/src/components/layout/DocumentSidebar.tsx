@@ -3,9 +3,9 @@ import type { DocumentRow } from "../../types/api";
 
 export function DocumentSidebar({ docs, activeId, onPick }: { docs: DocumentRow[]; activeId: number; onPick: (id: number) => void }) {
   return (
-    <aside className="h-full border-r border-black/10 bg-white/60 p-3">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-black/50">Documents</div>
-      <div className="space-y-2">
+    <aside className="flex h-full min-h-0 flex-col border-r border-black/10 bg-white/60 p-3">
+      <div className="mb-2 shrink-0 text-xs font-semibold uppercase tracking-wide text-black/50">Documents</div>
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {docs.map((doc) => (
           <button
             key={doc.id}

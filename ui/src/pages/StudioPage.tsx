@@ -22,6 +22,15 @@ type Collaborator = {
   color: string;
   caretLeft: number;
   caretRight: number;
+  mouseX: number;
+  mouseY: number;
+  mouseVisible: boolean;
+};
+
+type SharedViewState = {
+  zoom: number;
+  nx: number;
+  ny: number;
 };
 
 type DragState =
@@ -58,6 +67,7 @@ export function StudioPage() {
   const [trace, setTrace] = useState<string[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [collaborators, setCollaborators] = useState<Record<number, Collaborator>>({});
+  const [canvasView, setCanvasView] = useState<SharedViewState>({ zoom: 1, nx: 0, ny: 0 });
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [previewSplit, setPreviewSplit] = useState(0.5);
   const [traceHeight, setTraceHeight] = useState(112);
@@ -72,6 +82,10 @@ export function StudioPage() {
   const canEditRef = useRef(true);
   const lastSentCodeRef = useRef("");
   const dragRef = useRef<DragState>(null);
+  const viewFrameRef = useRef<number | null>(null);
+  const cursorFrameRef = useRef<number | null>(null);
+  const pendingViewRef = useRef<SharedViewState | null>(null);
+  const pendingCursorRef = useRef<{ x: number; y: number; visible: boolean } | null>(null);
 
   const canEdit = lockUserId === null || lockUserId === user.id;
   canEditRef.current = canEdit;
@@ -93,14 +107,51 @@ export function StudioPage() {
   }, []);
 
   const closeWs = useCallback(() => {
+    if (viewFrameRef.current) {
+      window.cancelAnimationFrame(viewFrameRef.current);
+      viewFrameRef.current = null;
+    }
+    if (cursorFrameRef.current) {
+      window.cancelAnimationFrame(cursorFrameRef.current);
+      cursorFrameRef.current = null;
+    }
     wsRef.current?.close();
     wsRef.current = null;
     setWsState(null);
   }, []);
 
+  const sendViewState = useCallback((view: SharedViewState) => {
+    pendingViewRef.current = view;
+    if (viewFrameRef.current) return;
+    viewFrameRef.current = window.requestAnimationFrame(() => {
+      viewFrameRef.current = null;
+      if (!pendingViewRef.current) return;
+      const payload = pendingViewRef.current;
+      pendingViewRef.current = null;
+      if (wsRef.current?.isOpen()) {
+        wsRef.current.sendViewState({ view: payload });
+      }
+    });
+  }, []);
+
+  const sendCursor = useCallback((cursor: { x: number; y: number; visible: boolean }) => {
+    pendingCursorRef.current = cursor;
+    if (cursorFrameRef.current) return;
+    cursorFrameRef.current = window.requestAnimationFrame(() => {
+      cursorFrameRef.current = null;
+      if (!pendingCursorRef.current) return;
+      const payload = pendingCursorRef.current;
+      pendingCursorRef.current = null;
+      if (wsRef.current?.isOpen()) {
+        wsRef.current.sendViewState({ cursor: payload });
+      }
+    });
+  }, []);
+
   const loadDocument = useCallback(async (nextDocId: number) => {
     const seq = ++loadSeqRef.current;
     setCollaborators({});
+    setCanvasView({ zoom: 1, nx: 0, ny: 0 });
     closeWs();
 
     const d = await api.getDocument(token, nextDocId);
@@ -144,9 +195,19 @@ export function StudioPage() {
             color: String(c?.color ?? "#9ca3af"),
             caretLeft: Number(c?.caret?.left ?? 0),
             caretRight: Number(c?.caret?.right ?? 0),
+            mouseX: Number(c?.cursor?.x ?? 0),
+            mouseY: Number(c?.cursor?.y ?? 0),
+            mouseVisible: Boolean(c?.cursor?.visible ?? false),
           };
         }
         setCollaborators(entries);
+        if (p?.viewState && typeof p.viewState.zoom === "number") {
+          setCanvasView({
+            zoom: Number(p.viewState.zoom),
+            nx: Number(p.viewState.nx ?? 0),
+            ny: Number(p.viewState.ny ?? 0),
+          });
+        }
       },
       onLockAcquired: (p) => {
         addTrace(`IN LOCK_ACQUIRED user=${p?.userId ?? "?"}`);
@@ -209,6 +270,9 @@ export function StudioPage() {
               color: String(p?.color ?? prev[uid]?.color ?? "#9ca3af"),
               caretLeft: Number(p?.caret?.left ?? prev[uid]?.caretLeft ?? 0),
               caretRight: Number(p?.caret?.right ?? prev[uid]?.caretRight ?? 0),
+              mouseX: Number(prev[uid]?.mouseX ?? 0),
+              mouseY: Number(prev[uid]?.mouseY ?? 0),
+              mouseVisible: Boolean(prev[uid]?.mouseVisible ?? false),
             },
           }));
         }
@@ -225,6 +289,9 @@ export function StudioPage() {
             color: String(p?.color ?? "#9ca3af"),
             caretLeft: Number(p?.caret?.left ?? 0),
             caretRight: Number(p?.caret?.right ?? 0),
+            mouseX: Number(p?.cursor?.x ?? 0),
+            mouseY: Number(p?.cursor?.y ?? 0),
+            mouseVisible: Boolean(p?.cursor?.visible ?? false),
           },
         }));
       },
@@ -246,6 +313,31 @@ export function StudioPage() {
       onLockChanged: (p) => {
         addTrace(`IN LOCK_CHANGED lock=${p.lockUserId ?? "none"}`);
         setLock(p.lockUserId ?? null);
+      },
+      onViewState: (p) => {
+        const uid = Number(p?.userId ?? 0);
+        if (p?.view && typeof p.view.zoom === "number") {
+          setCanvasView({
+            zoom: Number(p.view.zoom),
+            nx: Number(p.view.nx ?? 0),
+            ny: Number(p.view.ny ?? 0),
+          });
+        }
+        if (uid > 0 && p?.cursor) {
+          setCollaborators((prev) => ({
+            ...prev,
+            [uid]: {
+              userId: uid,
+              name: String(p?.name ?? prev[uid]?.name ?? `user-${uid}`),
+              color: String(p?.color ?? prev[uid]?.color ?? "#9ca3af"),
+              caretLeft: Number(prev[uid]?.caretLeft ?? 0),
+              caretRight: Number(prev[uid]?.caretRight ?? 0),
+              mouseX: Number(p.cursor.x ?? prev[uid]?.mouseX ?? 0),
+              mouseY: Number(p.cursor.y ?? prev[uid]?.mouseY ?? 0),
+              mouseVisible: Boolean(p.cursor.visible ?? prev[uid]?.mouseVisible ?? false),
+            },
+          }));
+        }
       },
       onError: (p) => {
         const code = p?.code ?? "unknown";
@@ -481,7 +573,25 @@ export function StudioPage() {
                     };
                   }}
                 />
-                <Preview svg={svg} />
+                <Preview
+                  svg={svg}
+                  view={canvasView}
+                  onViewChange={(next) => {
+                    setCanvasView(next);
+                    sendViewState(next);
+                  }}
+                  onCursor={sendCursor}
+                  cursors={Object.values(collaborators)
+                    .filter((c) => c.userId !== user.id)
+                    .map((c) => ({
+                      userId: c.userId,
+                      name: c.name,
+                      color: c.color,
+                      x: c.mouseX,
+                      y: c.mouseY,
+                      visible: c.mouseVisible,
+                    }))}
+                />
               </div>
 
               <div

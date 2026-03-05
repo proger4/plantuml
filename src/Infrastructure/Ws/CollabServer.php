@@ -19,6 +19,7 @@ use Ratchet\MessageComponentInterface;
  * - Client -> DOC_COLLABORATOR_ACTION {action:'acquire_lock'|'release_lock'}
  * - Client -> DOC_EDIT {docId, change:{type, range:{left,right}, text}, caret:{left,right}}
  * - Client -> DOC_RENDER_REQUEST {docId}
+ * - Client -> DOC_VIEW_STATE {view:{zoom,nx,ny}?, cursor:{x,y,visible}?}
  *
  * TODO (later):
  * - Replace token stub with Symfony Security + JWT/session cookies.
@@ -26,8 +27,10 @@ use Ratchet\MessageComponentInterface;
  */
 final class CollabServer implements MessageComponentInterface
 {
-  /** @var array<int, array{userId:int, docId:int|null, name:string, color:string, caretLeft:int, caretRight:int}> */
+  /** @var array<int, array{userId:int, docId:int|null, name:string, color:string, caretLeft:int, caretRight:int, mouseX:float, mouseY:float, mouseVisible:bool}> */
   private array $ctx = [];
+  /** @var array<int, array{zoom:float,nx:float,ny:float}> */
+  private array $viewByDoc = [];
 
   public function __construct(
     private UseCases $useCases,
@@ -43,6 +46,9 @@ final class CollabServer implements MessageComponentInterface
       'color' => '#9ca3af',
       'caretLeft' => 0,
       'caretRight' => 0,
+      'mouseX' => 0.5,
+      'mouseY' => 0.5,
+      'mouseVisible' => false,
     ];
     $this->send($conn, 'HELLO', ['server' => 'plantuml-studio-ws']);
   }
@@ -66,6 +72,7 @@ final class CollabServer implements MessageComponentInterface
         'DOC_COLLABORATOR_ACTION' => $this->handleAction($from, $payload),
         'DOC_EDIT' => $this->handleEdit($from, $payload),
         'DOC_RENDER_REQUEST' => $this->handleRender($from, $payload),
+        'DOC_VIEW_STATE' => $this->handleViewState($from, $payload),
         default => $this->sendError($from, 'unknown_event', "Unknown event: $event"),
       };
     } catch (\Throwable $e) {
@@ -122,6 +129,7 @@ final class CollabServer implements MessageComponentInterface
     $this->ctx[$conn->resourceId]['docId'] = $docId;
 
     $this->sessions->join($docId, $conn);
+    $this->viewByDoc[$docId] ??= ['zoom' => 1.0, 'nx' => 0.0, 'ny' => 0.0];
     $doc = $this->useCases->getDocument($userId, $docId);
 
     $this->send($conn, 'DOC_SNAPSHOT', [
@@ -130,6 +138,7 @@ final class CollabServer implements MessageComponentInterface
       'revision' => (int)$doc['current_revision'],
       'lockUserId' => $this->useCases->getLockUserId($docId),
       'collaborators' => $this->collaborators($docId),
+      'viewState' => $this->viewByDoc[$docId],
     ]);
 
     $this->broadcast($docId, 'DOC_COLLABORATOR_JOIN', [
@@ -257,6 +266,52 @@ final class CollabServer implements MessageComponentInterface
     }
   }
 
+  private function handleViewState(ConnectionInterface $conn, array $p): void
+  {
+    $docId = (int)($this->ctx[$conn->resourceId]['docId'] ?? 0);
+    $userId = (int)($this->ctx[$conn->resourceId]['userId'] ?? 0);
+    if ($docId <= 0 || $userId <= 0) {
+      $this->sendError($conn, 'bad_state', 'JOIN and AUTH required');
+      return;
+    }
+
+    $out = [
+      'docId' => $docId,
+      'userId' => $userId,
+      'name' => $this->ctx[$conn->resourceId]['name'],
+      'color' => $this->ctx[$conn->resourceId]['color'],
+    ];
+
+    if (is_array($p['view'] ?? null)) {
+      $zoom = (float)($p['view']['zoom'] ?? 1.0);
+      $nx = (float)($p['view']['nx'] ?? 0.0);
+      $ny = (float)($p['view']['ny'] ?? 0.0);
+      $view = [
+        'zoom' => max(0.2, min(6.0, $zoom)),
+        'nx' => max(-5.0, min(5.0, $nx)),
+        'ny' => max(-5.0, min(5.0, $ny)),
+      ];
+      $this->viewByDoc[$docId] = $view;
+      $out['view'] = $view;
+    }
+
+    if (is_array($p['cursor'] ?? null)) {
+      $x = (float)($p['cursor']['x'] ?? 0.5);
+      $y = (float)($p['cursor']['y'] ?? 0.5);
+      $visible = (bool)($p['cursor']['visible'] ?? false);
+      $this->ctx[$conn->resourceId]['mouseX'] = max(0.0, min(1.0, $x));
+      $this->ctx[$conn->resourceId]['mouseY'] = max(0.0, min(1.0, $y));
+      $this->ctx[$conn->resourceId]['mouseVisible'] = $visible;
+      $out['cursor'] = [
+        'x' => $this->ctx[$conn->resourceId]['mouseX'],
+        'y' => $this->ctx[$conn->resourceId]['mouseY'],
+        'visible' => $this->ctx[$conn->resourceId]['mouseVisible'],
+      ];
+    }
+
+    $this->broadcast($docId, 'DOC_VIEW_STATE', $out, except: $conn);
+  }
+
   private function handleRender(ConnectionInterface $conn, array $p): void
   {
     $docId = (int)($this->ctx[$conn->resourceId]['docId'] ?? 0);
@@ -299,6 +354,7 @@ final class CollabServer implements MessageComponentInterface
         'name' => $ctx['name'],
         'color' => $ctx['color'],
         'caret' => ['left' => $ctx['caretLeft'], 'right' => $ctx['caretRight']],
+        'cursor' => ['x' => $ctx['mouseX'], 'y' => $ctx['mouseY'], 'visible' => $ctx['mouseVisible']],
       ];
     }
     return $list;
