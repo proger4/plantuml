@@ -22,6 +22,7 @@ help:
 	@echo "make deps         # install composer dependencies if needed"
 	@echo "make migrate      # run SQL migrations"
 	@echo "make renderer-up  # start PlantUML renderer docker service"
+	@echo "make renderer-up-soft # try start renderer, but do not fail"
 
 deps:
 	@if [ -f vendor/autoload.php ]; then \
@@ -46,7 +47,7 @@ deps-soft:
 migrate:
 	php bin/migrate.php
 
-start: migrate start-http start-ws status
+start: renderer-up-soft migrate start-http start-ws status
 
 start-http:
 	@mkdir -p $(RUN_DIR) $(LOG_DIR)
@@ -109,6 +110,10 @@ logs:
 
 renderer-up:
 	docker compose up -d plantuml-renderer
+
+renderer-up-soft:
+	@echo "Starting renderer (best-effort)..."
+	@docker compose up -d plantuml-renderer || echo "WARNING: renderer was not started"
 
 renderer-down:
 	docker compose stop plantuml-renderer

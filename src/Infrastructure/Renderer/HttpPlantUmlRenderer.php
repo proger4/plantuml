@@ -32,10 +32,14 @@ final class HttpPlantUmlRenderer implements RendererGateway
     ]);
 
     $svg = @file_get_contents($this->endpoint, false, $context);
-    if ($svg === false) {
+    if ($svg === false || !str_contains($svg, '<svg')) {
+      $reason = error_get_last()['message'] ?? 'renderer_unreachable';
+      $errorSvg = $this->errorSvg($documentId, $revision, $reason);
+      $path = rtrim($this->renderDir, '/') . "/doc_{$documentId}_rev_{$revision}.svg";
+      file_put_contents($path, $errorSvg);
       return [
-        'svgPath' => '',
-        'svg' => '',
+        'svgPath' => $path,
+        'svg' => $errorSvg,
         'isValid' => false,
       ];
     }
@@ -48,5 +52,18 @@ final class HttpPlantUmlRenderer implements RendererGateway
       'svg' => $svg,
       'isValid' => true,
     ];
+  }
+
+  private function errorSvg(int $documentId, int $revision, string $reason): string
+  {
+    $safe = htmlspecialchars($reason, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="180">
+  <rect x="0" y="0" width="100%" height="100%" fill="#fff7ed"/>
+  <text x="20" y="36" font-family="monospace" font-size="16" fill="#b45309">PlantUML renderer unavailable</text>
+  <text x="20" y="62" font-family="monospace" font-size="12" fill="#92400e">doc={$documentId} rev={$revision}</text>
+  <text x="20" y="90" font-family="monospace" font-size="12" fill="#92400e">{$safe}</text>
+</svg>
+SVG;
   }
 }

@@ -7,7 +7,6 @@ use App\Domain\Policy\BasicDocumentRestrictions;
 use App\Infrastructure\Db\Sqlite;
 use App\Infrastructure\Event\InMemoryEventBus;
 use App\Infrastructure\Renderer\HttpPlantUmlRenderer;
-use App\Infrastructure\Renderer\StubPlantUmlRenderer;
 use App\Infrastructure\Repository\PdoRepositories;
 use App\Infrastructure\Ws\CollabServer;
 use App\Application\UseCases;
@@ -25,7 +24,6 @@ return (function (): array {
   $renderDir = dirname(__DIR__) . '/var/renders';
   $rendererEndpoint = getenv('PLANTUML_RENDERER_URL') ?: 'http://127.0.0.1:8082/svg';
   $renderer = new HttpPlantUmlRenderer($rendererEndpoint, $renderDir);
-  $fallbackRenderer = new StubPlantUmlRenderer($renderDir);
 
   $restrictions = new BasicDocumentRestrictions($repos->documents());
 
@@ -37,22 +35,7 @@ return (function (): array {
     $repos->revisions(),
     $repos->sessions(),
     $eventBus,
-    new class($renderer, $fallbackRenderer) implements \App\Application\Ports\RendererGateway {
-      public function __construct(
-        private HttpPlantUmlRenderer $real,
-        private StubPlantUmlRenderer $fallback
-      ) {}
-
-      public function renderSvg(int $documentId, int $revision, string $code): array
-      {
-        $result = $this->real->renderSvg($documentId, $revision, $code);
-        if (($result['isValid'] ?? false) === true) {
-          return $result;
-        }
-        // If renderer service is unavailable, keep app usable and mark via SVG stub.
-        return $this->fallback->renderSvg($documentId, $revision, $code);
-      }
-    }
+    $renderer
   );
 
   $useCases = new UseCases($ports, $restrictions, $sessionManager, $applier);
