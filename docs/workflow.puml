@@ -1,0 +1,35 @@
+@startuml
+title Sheet 6/8 — Document Workflow + Rendering
+
+[*] --> empty
+
+state empty
+state invalid
+state valid
+state deleted
+
+empty --> invalid : render_failed
+empty --> valid   : render_ok
+
+invalid --> valid : render_ok
+valid --> invalid : render_failed
+
+empty --> deleted : delete
+invalid --> deleted : delete
+valid --> deleted : delete
+
+note right of valid
+DOC_RENDER_FINISHED:
+- isValid=true
+- svgPath set
+- tsRendered set
+end note
+
+note left of invalid
+DOC_RENDER_FINISHED:
+- isValid=false
+- svgPath may be null
+- store error details (optional)
+end note
+
+@enduml

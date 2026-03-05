@@ -1,0 +1,27 @@
+@startuml
+title Sheet 7/8 — Quiz Flow (Random test + Submit)
+
+actor "User" as U
+participant "React Studio" as UI
+participant "QuizController" as QC
+participant "TakeRandomQuiz" as UR
+participant "SubmitQuiz" as US
+participant "RendererGateway" as RG
+database "SQLite" as DB
+
+== Start random quiz ==
+U -> UI : Click "+"
+UI -> QC : A16 POST /api/quizzes/random
+QC -> UR : execute(userId)
+UR -> DB : select random Quiz\n(+ beforeDocument)
+QC --> UI : {quizId, formulation,\n beforeDoc:{id,code}}
+
+== Solve ==
+U -> UI : edit code (WS/Local)\nthen Submit
+UI -> QC : A17 POST /api/quizzes/{id}/submit\n{code | tryoutRevisionId}
+QC -> US : execute(...)
+US -> RG : renderSvg(tryoutCode)
+US -> DB : load requiredDocument.code\nrenderSvg(requiredCode)
+US -> DB : insert Attempt(score,...)
+QC --> UI : {score, isPass, diffHint?, requiredSvg? (optional)}
+@enduml

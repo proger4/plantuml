@@ -1,0 +1,81 @@
+@startuml
+title enums-all.puml — All enums (Domain + UI + Protocol)
+
+' Domain
+enum DocumentStatus {
+  empty
+  valid
+  invalid
+  deleted
+}
+
+enum ChangeType {
+  insert
+  replace
+}
+
+enum RestrictionCategory {
+  not_implemented
+  auth_required
+  not_owner
+  locked_by_other
+  deleted
+  invalid_transition
+  forbidden
+}
+
+' Workflow transitions (backend) — recommended explicit naming
+enum WorkflowAction {
+  render_ok
+  render_failed
+  delete
+  publish
+  unpublish
+}
+
+' UI states
+enum UiState {
+  login_idle
+  login_submitting
+  studio_no_doc
+  studio_loading
+  studio_viewing
+  studio_locked
+  studio_editing
+  studio_rendering
+  studio_render_ready
+  studio_render_error
+  quiz_idle
+  quiz_editing
+  quiz_submitting
+  quiz_result
+}
+
+' UI actions (atomic intent)
+enum UiAction {
+  login_submit
+  logout_click
+  open_document
+  create_document
+  delete_document
+  toggle_favorite
+  publish
+  join_session
+  acquire_lock
+  release_lock
+  type_edit
+  save_revision
+  render_request
+  quiz_start
+  quiz_submit
+}
+
+' WS delivery marking
+enum DeliveryMark {
+  ui_to_backend
+  backend_to_ui_personal
+  backend_to_ui_broadcast
+  backend_internal
+}
+
+@enduml

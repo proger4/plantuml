@@ -1,0 +1,17 @@
+{
+  "name": "demo/plantuml-studio",
+  "type": "project",
+  "require": {
+    "php": ">=8.2",
+    "cboden/ratchet": "^0.4",
+    "react/event-loop": "^1.4",
+    "react/socket": "^1.16",
+    "doctrine/orm": "^3.6",
+    "symfony/security-bundle": "^7.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  }
+}

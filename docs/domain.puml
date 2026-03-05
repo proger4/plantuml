@@ -1,0 +1,97 @@
+@startuml
+title Sheet 2/8 — Domain Model (DDD-light)
+
+skinparam classAttributeIconSize 0
+
+class User {
+  +id: int
+  +name: string
+  +passwordHash: string
+}
+
+enum DocumentStatus {
+  empty
+  valid
+  invalid
+  deleted
+}
+
+enum ChangeType {
+  insert
+  replace
+}
+
+enum RestrictionCategory {
+  not_implemented
+  auth_required
+  not_owner
+  locked_by_other
+  deleted
+  invalid_transition
+  forbidden
+}
+
+class Document {
+  +id: int
+  +authorId: int
+  +uniqueSlug: string
+  +isPublic: bool
+  +status: DocumentStatus
+  +currentRevision: int
+  +code: text
+}
+
+class Revision {
+  +id: int
+  +documentId: int
+  +revision: int
+  +tsCreated: datetime
+  +code: text
+  +isValid: bool
+  +tsRendered: datetime?
+  +svgPath: string?
+}
+
+class Session {
+  +id: int
+  +documentId: int
+  +lockedByUserId: int?
+  +lockTs: datetime?
+}
+
+class Quiz {
+  +id: int
+  +formulation: text
+  +beforeDocumentId: int
+  +requiredDocumentId: int
+}
+
+class Attempt {
+  +id: int
+  +userId: int
+  +quizId: int
+  +tryoutRevisionId: int
+  +tsCreated: datetime
+  +score: int
+}
+
+class CaretRange <<value object>> {
+  +left: int
+  +right: int
+}
+
+class TextChange <<value object>> {
+  +type: ChangeType
+  +range: CaretRange
+  +text: string
+}
+
+User "1" --> "many" Document : author
+Document "1" --> "many" Revision
+Document "1" --> "0..1" Session : active collab
+Quiz --> Document : before
+Quiz --> Document : required
+Attempt --> Quiz
+Attempt --> Revision : tryout
+
+@enduml

@@ -1,0 +1,9 @@
+services:
+  plantuml-renderer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: plantuml-renderer
+    ports:
+      - "8082:8080"
+    restart: unless-stopped

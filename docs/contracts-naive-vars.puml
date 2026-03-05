@@ -1,0 +1,164 @@
+@startuml
+title contracts-naive-vars.puml — Naive Vars / Contracts (HTTP + WS)
+
+skinparam classAttributeIconSize 0
+
+' nv1: code
+class Code <<nv1>> {
+  +text: string
+}
+
+' nv2: caretPosition (single index) + selection range (better)
+class CaretPosition <<nv2>> {
+  +pos: int
+}
+class CaretRange {
+  +left: int
+  +right: int
+}
+
+' nv3: change
+enum ChangeType {
+  insert
+  replace
+}
+class TextChange <<nv3>> {
+  +type: ChangeType
+  +range: CaretRange
+  +text: string
+}
+
+' nv4: action
+enum ActionName {
+  acquire_lock
+  release_lock
+  render_request
+  save_revision
+  publish
+  toggle_favorite
+  delete_document
+  create_document
+  join_session
+  leave_session
+  quiz_start
+  quiz_submit
+  login
+  logout
+}
+class Action <<nv4>> {
+  +name: ActionName
+}
+
+' nv5: state (UI-centric + doc workflow state)
+enum UiState <<nv5>> {
+  login_idle
+  login_submitting
+  studio_no_doc
+  studio_loading
+  studio_viewing
+  studio_locked
+  studio_editing
+  studio_rendering
+  studio_render_ready
+  studio_render_error
+  quiz_idle
+  quiz_editing
+  quiz_submitting
+  quiz_result
+}
+
+' nv6: transition
+class Transition <<nv6>> {
+  +stateBefore: UiState
+  +stateAfter: UiState
+  +action: ActionName
+}
+
+' nv7: event (WS envelope)
+enum DeliveryMark {
+  ui_to_backend
+  backend_to_ui_personal
+  backend_to_ui_broadcast
+  backend_internal
+}
+
+class WsEnvelope <<nv7>> {
+  +event: string
+  +payload: any
+  +correlationId: string?
+  +docId: int?
+  +sessionId: int?
+  +ts: string?
+  +mark: DeliveryMark
+}
+
+' HTTP contracts (minimal)
+class HttpRequest {
+  +headers.Authorization: "Bearer <token>"
+  +body: json
+}
+class HttpResponse {
+  +status: int
+  +body: json
+}
+
+class Api_Login_Request {
+  +name: string
+  +password: string
+}
+class Api_Login_Response {
+  +token: string
+  +user: {id:int,name:string}
+}
+
+class Api_GetDocument_Response {
+  +document: {id:int, code:string, current_revision:int, status:string, is_public:int}
+}
+
+class Api_SaveRevision_Request {
+  +code: string
+}
+class Api_SaveRevision_Response {
+  +ok: bool
+  +docId: int
+  +revisionId: int
+  +revision: int
+  +isValid: bool
+  +svgPath: string
+  +svg: string
+}
+
+class Api_JoinSession_Request {
+  +documentId: int
+}
+class Api_JoinSession_Response {
+  +ok: bool
+  +sessionId: int
+  +wsUrl: string
+  +docId: int
+}
+
+WsEnvelope o-- TextChange
+TextChange o-- CaretRange
+Transition --> UiState
+Transition --> ActionName
+
+HttpRequest --> Api_Login_Request
+HttpResponse --> Api_Login_Response
+HttpResponse --> Api_GetDocument_Response
+HttpRequest --> Api_SaveRevision_Request
+HttpResponse --> Api_SaveRevision_Response
+HttpRequest --> Api_JoinSession_Request
+HttpResponse --> Api_JoinSession_Response
+
+note right of TextChange
+Range indices are UTF-8 codepoint indices in backend.
+Frontend MUST be consistent with this choice.
+end note
+
+note bottom of WsEnvelope
+Recommended: include correlationId for ACK matching.
+mark determines delivery semantics.
+end note
+
+@enduml

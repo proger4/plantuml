@@ -1,0 +1,54 @@
+@startuml
+title Sheet 1/8 — System Context + Sheets Map
+
+skinparam componentStyle rectangle
+
+actor "User" as user
+
+rectangle "Browser\nReact SPA" as spa
+rectangle "Symfony 8 API\n(HTTP Controllers)" as api
+rectangle "WS Gateway\nRatchet Server" as ws
+database "SQLite\n(Doctrine ORM)" as db
+rectangle "PlantUML Renderer\n(PlantUML Server / local service)" as renderer
+
+user --> spa : UI\nLogin / Studio / Quiz
+spa --> api : HTTPS (REST)\nJSON
+spa --> ws : WSS (WebSocket)\ncollaboration
+
+api --> db : Doctrine ORM
+api --> renderer : Render requests\n(SVG)
+ws --> api : Call Application layer\n(or shared services)
+ws --> db : Session/Revision reads (optional)\nprefer via ports
+ws --> renderer : render debounce (optional)\nprefer via API/Messenger
+
+note right of spa
+Zustand stores:
+- authStore
+- settingsStore
+- studioStore
+- sessionStore
+- quizStore
+end note
+
+package "Sheets Map (1..8)" as sheets {
+  rectangle "1 Context" as S1
+  rectangle "2 Domain" as S2
+  rectangle "3 UseCases" as S3
+  rectangle "4 HTTP API" as S4
+  rectangle "5 WS Collab" as S5
+  rectangle "6 Workflow+Render" as S6
+  rectangle "7 Quiz" as S7
+  rectangle "8 Frontend UX" as S8
+
+  S1 --> S4 : REST boundary
+  S1 --> S5 : WS boundary
+  S4 --> S3 : Controllers -> Interactors
+  S5 --> S3 : WS -> Interactors
+  S3 --> S2 : Uses entities/policies
+  S3 --> S6 : Render + state transitions
+  S3 --> S7 : Quiz selection/submit
+  S8 --> S4 : HTTP calls
+  S8 --> S5 : WS events
+}
+
+@enduml

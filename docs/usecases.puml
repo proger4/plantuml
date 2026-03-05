@@ -1,0 +1,63 @@
+@startuml
+title Sheet 3/8 — Application Layer (UseCases + Ports)
+
+skinparam componentStyle rectangle
+
+package "Application (Interactors)" {
+  [LoginUser] as U1
+  [LogoutUser] as U1b
+  [CreateDocument] as U2a
+  [DeleteDocument] as U2b
+  [ToggleFavorite] as U2c
+  [PublishDocument] as U3
+  [JoinSession] as U4
+  [ApplyEdit] as U5
+  [SaveRevision] as U6
+  [TakeRandomQuiz] as U7
+  [ListPersonalDocs] as U8a
+  [GetStats] as U8b
+  [SubmitQuiz] as U7b
+}
+
+package "Core Bricks" {
+  [SessionManager] as C1
+  [DocumentApplier] as C2
+  [RestrictionInterface] as C3
+}
+
+package "Ports (Interfaces)" {
+  [DocumentRepository] as PDoc
+  [RevisionRepository] as PRev
+  [SessionRepository] as PSess
+  [QuizRepository] as PQuiz
+  [EventBus] as PBus
+  [RendererGateway] as PRend
+}
+
+U4 --> C1
+U5 --> C1
+U5 --> C2
+U2a --> PDoc
+U2b --> PDoc
+U3 --> PDoc
+U6 --> PRev
+U4 --> PSess
+U5 --> PSess
+U7 --> PQuiz
+U7b --> PQuiz
+U7b --> PRend
+U5 --> PBus
+U6 --> PBus
+U3 --> PBus
+
+C3 ..> U2b : policy checks
+C3 ..> U3 : policy checks
+C3 ..> U5 : policy checks
+
+note right of PBus
+Implementation options:
+- Symfony EventDispatcher (sync)
+- Symfony Messenger (async render/jobs)
+end note
+
+@enduml

@@ -1,0 +1,44 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# PHP
+/vendor/
+composer.phar
+.phpunit.result.cache
+.php-cs-fixer.cache
+
+# Node / frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+old
+
+# Runtime artifacts
+/var/*
+!/var/.gitkeep
+/var/*.sqlite
+/var/*.sqlite3
+/var/*.db
+/var/renders/
+*.pid
+*.sock
+*.tmp
+*.log
+
+# Test / coverage
+coverage/
+.coverage

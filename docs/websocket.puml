@@ -1,0 +1,56 @@
+@startuml
+title Sheet 5/8 — WS Collaboration Protocol (Events + Delivery)
+
+actor "Client A" as A
+actor "Client B" as B
+participant "Ratchet WS Server\n(WsGateway)" as W
+participant "SessionManager" as SM
+participant "ApplyEdit UseCase" as U5
+participant "DocumentApplier" as DA
+
+== Connect & Join ==
+A -> W : AUTH {sessionCookie | bearer}
+A -> W : JOIN {documentId}
+W -> SM : join(documentId, userId)
+W --> A : DOC_COLLABORATOR_JOIN (personal ack)
+W --> B : DOC_COLLABORATOR_JOIN (broadcast)
+
+== Acquire edit lock (simple, deterministic MVP) ==
+A -> W : DOC_COLLABORATOR_ACTION {action:'acquire_lock'}
+W -> SM : acquireLock(documentId, userId)
+W --> A : LOCK_ACQUIRED (personal)
+W --> B : LOCK_CHANGED (broadcast)
+
+== Edit (nv3: change + caret) ==
+A -> W : DOC_EDIT {docId, baseRevision, change:{type,range,text}, caret:{left,right}}
+W -> U5 : execute(change)
+U5 -> DA : apply(code, change)
+U5 -> SM : touchPresence()
+W --> A : DOC_EDIT_ACK {newRevision, caretNormalized}
+W --> B : DOC_EDIT_APPLIED {newRevision, change, authorId}
+
+== Leave ==
+A -> W : LEAVE
+W -> SM : leave()
+W --> B : DOC_COLLABORATOR_LEAVE (broadcast)
+
+note right of W
+Delivery rules:
+
+UI -> Backend:
+- AUTH, JOIN, LEAVE
+- DOC_COLLABORATOR_ACTION (acquire/release)
+- DOC_EDIT
+- DOC_RENDER_REQUEST (optional)
+
+Backend -> UI (broadcast):
+- DOC_COLLABORATOR_JOIN/LEAVE
+- LOCK_CHANGED
+- DOC_EDIT_APPLIED
+- DOC_RENDER_FINISHED
+
+Backend -> UI (personal):
+- *_ACK, errors, initial snapshot
+end note
+
+@enduml

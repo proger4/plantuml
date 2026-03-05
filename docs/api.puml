@@ -1,0 +1,79 @@
+@startuml
+title Sheet 4/8 — HTTP API Surface (Controllers -> UseCases)
+
+skinparam componentStyle rectangle
+
+package "Symfony Controllers" {
+  [AuthController] as HC1
+  [MeController] as HC2
+  [DocumentController] as HC3
+  [SessionController] as HC4
+  [QuizController] as HC5
+}
+
+package "UseCases" {
+  [LoginUser] as U1
+  [LogoutUser] as U1b
+  [CreateDocument] as U2a
+  [DeleteDocument] as U2b
+  [ToggleFavorite] as U2c
+  [PublishDocument] as U3
+  [SaveRevision] as U6
+  [JoinSession] as U4
+  [TakeRandomQuiz] as U7
+  [SubmitQuiz] as U7b
+  [ListPersonalDocs] as U8a
+  [GetStats] as U8b
+}
+
+HC1 --> U1
+HC1 --> U1b
+HC2 --> U8a
+HC2 --> U8b
+HC3 --> U2a
+HC3 --> U2b
+HC3 --> U2c
+HC3 --> U3
+HC3 --> U6
+HC4 --> U4
+HC5 --> U7
+HC5 --> U7b
+
+note right of HC3
+Symfony attributes (пример):
+#[Route('/api/documents', methods:['POST'])]
+#[IsGranted('DOC_CREATE')]
+#[Route('/api/documents/{id}', methods:['PUT'])]
+#[IsGranted('DOC_EDIT', subject:'document')]
+Use Voters for access rules.
+end note
+
+note bottom
+Numbered endpoints (compact):
+
+A1  POST   /api/auth/login
+A2  POST   /api/auth/logout
+
+A3  GET    /api/me/settings
+A4  PUT    /api/me/settings
+
+A5  GET    /api/me/documents?filter=personal|favorites|public
+A6  GET    /api/me/stats
+
+A7  POST   /api/documents                { code, isPublic? }
+A8  GET    /api/documents/{id}
+A9  PUT    /api/documents/{id}           { code, isPublic? }  (metadata only; editing is WS)
+A10 DELETE /api/documents/{id}
+A11 POST   /api/documents/{id}/favorite
+A12 DELETE /api/documents/{id}/favorite
+A13 POST   /api/documents/{id}/publish   { isPublic:true, slug? }
+
+A14 POST   /api/documents/{id}/revisions { code } -> Revision + render meta
+
+A15 POST   /api/sessions                 { documentId } -> sessionId + wsUrl
+
+A16 POST   /api/quizzes/random
+A17 POST   /api/quizzes/{id}/submit      { tryoutRevisionId | code }
+end note
+
+@enduml

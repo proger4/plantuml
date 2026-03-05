@@ -1,0 +1,169 @@
+@startuml
+title events-protocol.puml — WS/Domain events (names + payloads + marks)
+
+skinparam classAttributeIconSize 0
+
+enum DeliveryMark {
+  ui_to_backend
+  backend_to_ui_personal
+  backend_to_ui_broadcast
+  backend_internal
+}
+
+class WsEnvelope {
+  +event: WsEventName
+  +payload: any
+  +correlationId: string?
+  +docId: int?
+  +sessionId: int?
+  +ts: string?
+  +mark: DeliveryMark
+}
+
+enum WsEventName {
+  AUTH
+  AUTH_ACK
+  JOIN
+  LEAVE
+
+  DOC_SNAPSHOT
+
+  DOC_COLLABORATOR_JOIN
+  DOC_COLLABORATOR_LEAVE
+  DOC_COLLABORATOR_ACTION
+
+  DOC_EDIT
+  DOC_EDIT_ACK
+  DOC_EDIT_APPLIED
+
+  DOC_RENDER_REQUEST
+  DOC_RENDER_FINISHED
+
+  LOCK_CHANGED
+
+  ERROR
+}
+
+' Common payload blocks
+class Payload_Error {
+  +code: string
+  +message: string
+  +restrictionCategory: string?
+}
+
+class Payload_Auth {
+  +token: string
+}
+class Payload_AuthAck {
+  +userId: int
+}
+
+class Payload_Join {
+  +documentId: int
+}
+class Payload_Snapshot {
+  +docId: int
+  +code: string
+  +revision: int
+  +lockUserId: int?
+}
+
+class CaretRange {
+    +left:int
+    +right:int
+}
+enum ChangeType {
+    insert
+    replace
+}
+class Payload_Edit {
+  +docId: int
+  +baseRevision: int?  ' optional optimistic check
+  +change: {type:ChangeType, range:CaretRange, text:string}
+  +caret: CaretRange
+}
+
+class Payload_EditAck {
+  +ok: bool
+  +docId: int
+  +revision: int
+  +caret: CaretRange
+  +error?: Payload_Error
+}
+
+class Payload_EditApplied {
+  +docId: int
+  +userId: int
+  +revision: int
+  +change: any
+}
+
+class Payload_Action {
+  +action: "acquire_lock"|"release_lock"
+}
+class Payload_LockChanged {
+  +docId: int
+  +lockUserId: int?
+}
+
+class Payload_RenderRequest {
+  +docId: int?
+}
+class Payload_RenderFinished {
+  +docId: int
+  +revision: int
+  +isValid: bool
+  +svgPath: string
+  +svg?: string
+}
+
+WsEnvelope --> WsEventName
+WsEnvelope o-- Payload_Error
+
+WsEnvelope o-- Payload_Auth
+WsEnvelope o-- Payload_AuthAck
+WsEnvelope o-- Payload_Join
+WsEnvelope o-- Payload_Snapshot
+
+WsEnvelope o-- Payload_Edit
+WsEnvelope o-- Payload_EditAck
+WsEnvelope o-- Payload_EditApplied
+
+WsEnvelope o-- Payload_Action
+WsEnvelope o-- Payload_LockChanged
+
+WsEnvelope o-- Payload_RenderRequest
+WsEnvelope o-- Payload_RenderFinished
+
+note right of WsEventName
+Delivery marks (recommended):
+
+UI -> Backend (mark=ui_to_backend):
+- AUTH, JOIN, LEAVE
+- DOC_COLLABORATOR_ACTION
+- DOC_EDIT
+- DOC_RENDER_REQUEST
+
+Backend -> UI personal:
+- AUTH_ACK
+- DOC_SNAPSHOT
+- DOC_EDIT_ACK
+- ERROR
+
+Backend -> UI broadcast:
+- DOC_COLLABORATOR_JOIN/LEAVE
+- DOC_EDIT_APPLIED
+- DOC_RENDER_FINISHED
+- LOCK_CHANGED
+end note
+
+note bottom
+Domain/internal events (backend_internal) that may exist behind WS:
+- DocumentEdited
+- RenderRequested
+- RenderFinished
+- LockAcquired/Released
+These can be implemented via Symfony EventDispatcher/Messenger later.
+end note
+
+@enduml

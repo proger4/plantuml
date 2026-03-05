@@ -1,0 +1,63 @@
+@startuml
+title Sheet 8/8 — Frontend UX + Zustand State (Atomic Paths)
+
+skinparam componentStyle rectangle
+
+package "Screens" {
+  [LoginScreen] as SLogin
+  [StudioScreen] as SStudio
+}
+
+package "Studio Layout" {
+  [TopBar\n(details+actions)] as Top
+  [Sidebar\n(personal/public/favs)] as Side
+  [EditorPane\n(code + caret)] as Editor
+  [PreviewPane\n(svg)] as Preview
+}
+
+package "Zustand Stores" {
+  [authStore] as Auth
+  [settingsStore] as Set
+  [studioStore] as Studio
+  [sessionStore] as Sess
+  [quizStore] as Quiz
+}
+
+SLogin --> Auth : login/logout
+SStudio --> Set : load/save settings
+SStudio --> Studio : open doc, local edits, render state
+SStudio --> Sess : ws connect/join, presence, lock
+SStudio --> Quiz : quiz mode, submit
+
+SStudio --> Top
+SStudio --> Side
+SStudio --> Editor
+SStudio --> Preview
+
+note right of Studio
+Atomic actions (deterministic):
+1) openDocument(id)
+   - GET /api/documents/{id}
+   - POST /api/sessions {documentId}
+   - WS JOIN {docId}
+
+2) type/erase/selection
+   - compute change: {type, range, text}
+   - update local optimistic buffer
+   - WS DOC_EDIT {change, caret}
+
+3) saveRevision
+   - POST /api/documents/{id}/revisions {code}
+
+4) renderDebounce
+   - WS DOC_RENDER_REQUEST {code} (or rely on A14 result)
+
+5) quizStart (plus)
+   - POST /api/quizzes/random
+   - enter quizMode(beforeCode)
+
+6) quizSubmit
+   - POST /api/quizzes/{id}/submit {code}
+end note
+
+@enduml
