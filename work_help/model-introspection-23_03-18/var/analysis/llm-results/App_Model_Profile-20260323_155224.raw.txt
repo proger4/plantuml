@@ -1,0 +1,16 @@
+{
+    "action": "NEED_MORE_USAGE",
+    "case_type": "INHERITANCE_CASE",
+    "subject_key": "App\\\\Model\\\\Profile",
+    "status": "GAP",
+    "issue_code": "INH_CHILD_SET_INCOMPLETE",
+    "confidence": 0.25,
+    "decision_basis": [
+        "YII",
+        "USAGE"
+    ],
+    "requested_evidence": [
+        "USAGE_COLLECTION_SNIPPETS"
+    ],
+    "candidate": {}
+}

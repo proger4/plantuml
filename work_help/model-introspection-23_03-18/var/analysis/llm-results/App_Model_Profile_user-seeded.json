@@ -1,0 +1,11 @@
+{
+  "action": "NEED_MORE_USAGE",
+  "case_type": "RELATION_CASE",
+  "subject_key": "App\\Model\\Profile::user",
+  "status": "CONFLICT",
+  "issue_code": "REL_TYPE_MISMATCH",
+  "confidence": 0.42,
+  "decision_basis": ["YII", "SQL", "USAGE", "UML"],
+  "requested_evidence": ["USAGE_COLLECTION_SNIPPETS", "SQL_FK"],
+  "candidate": {}
+}

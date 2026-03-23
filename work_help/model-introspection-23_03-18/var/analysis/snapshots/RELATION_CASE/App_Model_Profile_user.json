@@ -1,0 +1,19 @@
+{
+  "snapshot_version": "v1",
+  "subject_key": "App\\Model\\Profile::user",
+  "case_type": "RELATION_CASE",
+  "status": "CONFLICT",
+  "issue_code": "REL_TYPE_MISMATCH",
+  "record_type": "RELATION_RECORD",
+  "evidence": {
+    "yii": {"relation_type": "BELONGS_TO", "target_class": "App\\Model\\User", "fk": "user_id"},
+    "sql": {"owner_table": "profiles", "fks": []},
+    "usage": {"patterns": {"collection_hits": 5, "singleton_hits": 4}},
+    "uml": {"graph_path": "./var/analysis/snapshots/_uml/App_Model_Profile.graph.json"}
+  },
+  "decision_contract": {
+    "allowed_actions": ["DECIDE", "NEED_MORE_USAGE", "DROP_CANDIDATE"],
+    "allowed_statuses": ["OK", "GAP", "CONFLICT", "MANUAL", "DROP", "UNSUPPORTED"],
+    "required_keys": ["action", "case_type", "subject_key", "status", "issue_code", "confidence", "decision_basis", "requested_evidence", "candidate"]
+  }
+}

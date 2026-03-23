@@ -1,0 +1,18 @@
+{
+  "registry": {
+    "entities": "./var/analysis/registry/entities.jsonl",
+    "relations": "./var/analysis/registry/relations.jsonl",
+    "inheritance": "./var/analysis/registry/inheritance.jsonl",
+    "discriminators": "./var/analysis/registry/discriminators.jsonl",
+    "issues": "./var/analysis/registry/issues.jsonl"
+  },
+  "snapshots": {
+    "dir": "./var/analysis/snapshots"
+  },
+  "llm": {
+    "results_dir": "./var/analysis/llm-results"
+  },
+  "reports": {
+    "dir": "./var/analysis/reports"
+  }
+}

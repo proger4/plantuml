@@ -1,0 +1,21 @@
+@startuml
+
+class App\\Model\\BaseProfile
+class App\\Model\\Profile
+class App\\Model\\AdminProfile
+class App\\Model\\GuestProfile
+class App\\Model\\User
+class App\\Model\\Member
+class App\\Model\\Tag
+class App\\Model\\View
+
+App\\Model\\BaseProfile <|-- App\\Model\\Profile
+App\\Model\\BaseProfile <|-- App\\Model\\AdminProfile
+App\\Model\\BaseProfile <|-- App\\Model\\GuestProfile
+
+App\\Model\\Profile --> App\\Model\\User : user
+App\\Model\\Profile --> App\\Model\\Member : members
+App\\Model\\Profile --> App\\Model\\Tag : tags
+App\\Model\\Profile --> App\\Model\\View : statViews
+
+@enduml

@@ -1,0 +1,4 @@
+{"record_type":"ISSUE_RECORD","subject_key":"App\\Model\\Profile::user","case_type":"RELATION_CASE","status":"CONFLICT","issue_code":"REL_TYPE_MISMATCH","summary":"Yii says BELONGS_TO, usage looks collection-like"}
+{"record_type":"ISSUE_RECORD","subject_key":"App\\Model\\Profile::members","case_type":"RELATION_CASE","status":"GAP","issue_code":"REL_SQL_GAP","summary":"No FK evidence for HAS_MANY relation in owner table"}
+{"record_type":"ISSUE_RECORD","subject_key":"App\\Model\\Profile","case_type":"INHERITANCE_CASE","status":"GAP","issue_code":"INH_CHILD_SET_INCOMPLETE","summary":"Root class has no confirmed descendants in current scope"}
+{"record_type":"ISSUE_RECORD","subject_key":"App\\Model\\Profile::discriminator","case_type":"DISCRIMINATOR_CASE","status":"CONFLICT","issue_code":"DISC_VALUE_CONFLICT","summary":"Type column exists, but candidate value map is empty while usage depends on type"}

@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "target": "App\\Model\\Profile",
+  "format": "json",
+  "status_counters": {
+    "OK": 0,
+    "GAP": 2,
+    "CONFLICT": 2,
+    "MANUAL": 0,
+    "DROP": 0,
+    "UNSUPPORTED": 0
+  },
+  "unresolved": [
+    {"subject_key": "App\\Model\\Profile::user", "case_type": "RELATION_CASE", "status": "CONFLICT", "issue_code": "REL_TYPE_MISMATCH"},
+    {"subject_key": "App\\Model\\Profile::members", "case_type": "RELATION_CASE", "status": "GAP", "issue_code": "REL_SQL_GAP"},
+    {"subject_key": "App\\Model\\Profile", "case_type": "INHERITANCE_CASE", "status": "GAP", "issue_code": "INH_CHILD_SET_INCOMPLETE"},
+    {"subject_key": "App\\Model\\Profile::discriminator", "case_type": "DISCRIMINATOR_CASE", "status": "CONFLICT", "issue_code": "DISC_VALUE_CONFLICT"}
+  ],
+  "issue_summary": [
+    {"issue_code": "DISC_VALUE_CONFLICT", "count": 1},
+    {"issue_code": "INH_CHILD_SET_INCOMPLETE", "count": 1},
+    {"issue_code": "REL_SQL_GAP", "count": 1},
+    {"issue_code": "REL_TYPE_MISMATCH", "count": 1}
+  ],
+  "report_path": "./var/analysis/reports/report-App_Model_Profile-seeded.json"
+}

@@ -1,0 +1,1 @@
+{"record_type":"ENTITY_RECORD","subject_key":"App\\Model\\Profile","status":"GAP","issue_code":null,"confidence":0.52,"yii":{"class":"App\\Model\\Profile","table_name":"profiles","columns":[],"scopes":["active"],"source_file":"./app/models/Profile.php"},"sql":{"table":"profiles","table_meta":{"columns":["id","user_ref","type","is_active"],"pk":["id"]}},"usage":{},"uml":{}}

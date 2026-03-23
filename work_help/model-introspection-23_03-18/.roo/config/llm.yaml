@@ -1,0 +1,15 @@
+{
+  "required_response_keys": [
+    "action",
+    "case_type",
+    "subject_key",
+    "status",
+    "issue_code",
+    "confidence",
+    "decision_basis",
+    "requested_evidence",
+    "candidate"
+  ],
+  "timeout_seconds": 120,
+  "result_path_pattern": "./var/analysis/llm-results"
+}

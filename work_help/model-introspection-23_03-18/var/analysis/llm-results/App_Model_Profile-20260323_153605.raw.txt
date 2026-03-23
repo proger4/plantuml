@@ -1,0 +1,59 @@
+Return JSON only.
+{
+    "snapshot_version": "v1",
+    "subject_key": "App\\\\Model\\\\Profile",
+    "case_type": "INHERITANCE_CASE",
+    "status": "GAP",
+    "issue_code": "INH_CHILD_SET_INCOMPLETE",
+    "record_type": "INHERITANCE_RECORD",
+    "evidence": {
+        "yii": [],
+        "sql": [],
+        "usage": {
+            "patterns": {
+                "singleton_hits": 0,
+                "collection_hits": 0,
+                "string_ref_hits": 0,
+                "criteria_hits": 0,
+                "inheritance_hits": 0,
+                "getter_conflict_hits": 0
+            },
+            "snippet_file": "/Users/vanopersimmon/Documents/Projects/plantuml/work_help/model-introspection-23_03-18/var/analysis/snapshots/_usage/App_Model_Profile.json",
+            "scanned_files": 0
+        },
+        "uml": {
+            "graph_path": "/Users/vanopersimmon/Documents/Projects/plantuml/work_help/model-introspection-23_03-18/var/analysis/snapshots/_uml/App_Model_Profile.graph.json",
+            "counts": {
+                "classes": 1,
+                "relation_edges": 0,
+                "inheritance_edges": 0
+            }
+        }
+    },
+    "decision_contract": {
+        "allowed_actions": [
+            "DECIDE",
+            "NEED_MORE_USAGE",
+            "DROP_CANDIDATE"
+        ],
+        "allowed_statuses": [
+            "OK",
+            "GAP",
+            "CONFLICT",
+            "MANUAL",
+            "DROP",
+            "UNSUPPORTED"
+        ],
+        "required_keys": [
+            "action",
+            "case_type",
+            "subject_key",
+            "status",
+            "issue_code",
+            "confidence",
+            "decision_basis",
+            "requested_evidence",
+            "candidate"
+        ]
+    }
+}

@@ -22,6 +22,13 @@ def iter_php_files(base: Path):
                 yield Path(dirpath) / name
 
 
+def to_rel(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def main() -> int:
     root = project_root()
     scope_arg = sys.argv[1] if len(sys.argv) > 1 else "."
@@ -51,7 +58,7 @@ def main() -> int:
             check=False,
         )
         status = proc.stdout.strip() or "BROKEN"
-        rel = php_file.relative_to(root).as_posix() if php_file.is_relative_to(root) else php_file.as_posix()
+        rel = to_rel(php_file, root)
 
         if status == "OK":
             print(f"OK: {rel}")

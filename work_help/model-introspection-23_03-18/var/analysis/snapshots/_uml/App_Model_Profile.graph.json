@@ -1,0 +1,8 @@
+{
+    "root": "App\\\\Model\\\\Profile",
+    "classes": [
+        "App\\\\Model\\\\Profile"
+    ],
+    "relation_edges": [],
+    "inheritance_edges": []
+}

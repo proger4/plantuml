@@ -1,0 +1,38 @@
+{
+    "ok": true,
+    "target": "App\\\\Model\\\\Profile",
+    "format": "json",
+    "status_counters": {
+        "OK": 0,
+        "GAP": 2,
+        "CONFLICT": 0,
+        "MANUAL": 0,
+        "DROP": 0,
+        "UNSUPPORTED": 0
+    },
+    "unresolved": [
+        {
+            "subject_key": "App\\\\Model\\\\Profile",
+            "case_type": "INHERITANCE_CASE",
+            "status": "GAP",
+            "issue_code": "INH_CHILD_SET_INCOMPLETE"
+        },
+        {
+            "subject_key": "App\\\\Model\\\\Profile::discriminator",
+            "case_type": "DISCRIMINATOR_CASE",
+            "status": "GAP",
+            "issue_code": "DISC_COLUMN_MISSING"
+        }
+    ],
+    "issue_summary": [
+        {
+            "issue_code": "DISC_COLUMN_MISSING",
+            "count": 1
+        },
+        {
+            "issue_code": "INH_CHILD_SET_INCOMPLETE",
+            "count": 1
+        }
+    ],
+    "report_path": "/Users/vanopersimmon/Documents/Projects/plantuml/work_help/model-introspection-23_03-18/var/analysis/reports/report-App_Model_Profile-20260323_153605.json"
+}

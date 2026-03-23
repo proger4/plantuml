@@ -1,0 +1,9 @@
+{
+  "project_root": ".",
+  "php_bin": "php8",
+  "python_bin": "python3",
+  "tools_bin_dir": "./tools/bin",
+  "runs_dir": "./.roo/runs",
+  "default_format": "table",
+  "default_unresolved_statuses": ["GAP", "CONFLICT", "MANUAL"]
+}

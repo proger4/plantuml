@@ -1,0 +1,19 @@
+{
+  "snapshot_version": "v1",
+  "subject_key": "App\\Model\\Profile::discriminator",
+  "case_type": "DISCRIMINATOR_CASE",
+  "status": "CONFLICT",
+  "issue_code": "DISC_VALUE_CONFLICT",
+  "record_type": "DISCRIMINATOR_RECORD",
+  "evidence": {
+    "yii": {},
+    "sql": {"candidate_columns": [{"table": "profiles", "column": "type"}]},
+    "usage": {"patterns": {"inheritance_hits": 3}},
+    "uml": {"graph_path": "./var/analysis/snapshots/_uml/App_Model_Profile.graph.json"}
+  },
+  "decision_contract": {
+    "allowed_actions": ["DECIDE", "NEED_MORE_USAGE", "DROP_CANDIDATE"],
+    "allowed_statuses": ["OK", "GAP", "CONFLICT", "MANUAL", "DROP", "UNSUPPORTED"],
+    "required_keys": ["action", "case_type", "subject_key", "status", "issue_code", "confidence", "decision_basis", "requested_evidence", "candidate"]
+  }
+}
